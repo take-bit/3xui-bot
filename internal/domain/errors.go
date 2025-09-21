@@ -39,9 +39,10 @@ var (
 	ErrPromocodeAlreadyUsed = errors.New("промокод уже использован")
 
 	// Ошибки рефералов
-	ErrSelfReferral    = errors.New("нельзя пригласить самого себя")
-	ErrAlreadyReferred = errors.New("пользователь уже приглашен")
-	ErrInvalidReferrer = errors.New("неверный реферер")
+	ErrReferralNotFound  = errors.New("реферальная связь не найдена")
+	ErrSelfReferral      = errors.New("нельзя пригласить самого себя")
+	ErrAlreadyReferred   = errors.New("пользователь уже приглашен")
+	ErrInvalidReferrer   = errors.New("неверный реферер")
 
 	// Ошибки уведомлений
 	ErrNotificationNotFound    = errors.New("уведомление не найдено")
