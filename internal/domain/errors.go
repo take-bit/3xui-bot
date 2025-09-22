@@ -4,6 +4,9 @@ import "errors"
 
 // Предопределенные ошибки домена
 var (
+	// Общие ошибки
+	ErrNotFound = errors.New("запись не найдена")
+
 	// Ошибки пользователей
 	ErrUserNotFound      = errors.New("пользователь не найден")
 	ErrUserAlreadyExists = errors.New("пользователь уже существует")
@@ -39,10 +42,10 @@ var (
 	ErrPromocodeAlreadyUsed = errors.New("промокод уже использован")
 
 	// Ошибки рефералов
-	ErrReferralNotFound  = errors.New("реферальная связь не найдена")
-	ErrSelfReferral      = errors.New("нельзя пригласить самого себя")
-	ErrAlreadyReferred   = errors.New("пользователь уже приглашен")
-	ErrInvalidReferrer   = errors.New("неверный реферер")
+	ErrReferralNotFound = errors.New("реферальная связь не найдена")
+	ErrSelfReferral     = errors.New("нельзя пригласить самого себя")
+	ErrAlreadyReferred  = errors.New("пользователь уже приглашен")
+	ErrInvalidReferrer  = errors.New("неверный реферер")
 
 	// Ошибки уведомлений
 	ErrNotificationNotFound    = errors.New("уведомление не найдено")

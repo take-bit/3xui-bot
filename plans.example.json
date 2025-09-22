@@ -1,0 +1,128 @@
+{
+  "plans": [
+    {
+      "id": 1,
+      "name": "1 месяц",
+      "description": "Базовый план на 1 месяц",
+      "duration_days": 30,
+      "devices": 1,
+      "price": {
+        "RUB": 100,
+        "USD": 2,
+        "EUR": 2
+      },
+      "features": [
+        "1 устройство",
+        "Неограниченный трафик",
+        "Поддержка 24/7"
+      ],
+      "is_active": true,
+      "is_popular": false,
+      "sort_order": 1
+    },
+    {
+      "id": 2,
+      "name": "3 месяца",
+      "description": "Популярный план на 3 месяца",
+      "duration_days": 90,
+      "devices": 1,
+      "price": {
+        "RUB": 250,
+        "USD": 5,
+        "EUR": 5
+      },
+      "features": [
+        "1 устройство",
+        "Неограниченный трафик",
+        "Поддержка 24/7",
+        "Экономия 50₽"
+      ],
+      "is_active": true,
+      "is_popular": true,
+      "sort_order": 2
+    },
+    {
+      "id": 3,
+      "name": "6 месяцев",
+      "description": "Выгодный план на 6 месяцев",
+      "duration_days": 180,
+      "devices": 2,
+      "price": {
+        "RUB": 450,
+        "USD": 9,
+        "EUR": 9
+      },
+      "features": [
+        "2 устройства",
+        "Неограниченный трафик",
+        "Поддержка 24/7",
+        "Экономия 150₽"
+      ],
+      "is_active": true,
+      "is_popular": false,
+      "sort_order": 3
+    },
+    {
+      "id": 4,
+      "name": "1 год",
+      "description": "Максимально выгодный план на 1 год",
+      "duration_days": 365,
+      "devices": 3,
+      "price": {
+        "RUB": 800,
+        "USD": 16,
+        "EUR": 16
+      },
+      "features": [
+        "3 устройства",
+        "Неограниченный трафик",
+        "Поддержка 24/7",
+        "Экономия 400₽",
+        "Приоритетная поддержка"
+      ],
+      "is_active": true,
+      "is_popular": false,
+      "sort_order": 4
+    }
+  ],
+  "trial_plan": {
+    "id": 0,
+    "name": "Пробный период",
+    "description": "Бесплатный пробный период",
+    "duration_days": 3,
+    "devices": 1,
+    "price": {
+      "RUB": 0,
+      "USD": 0,
+      "EUR": 0
+    },
+    "features": [
+      "1 устройство",
+      "Неограниченный трафик",
+      "Поддержка 24/7"
+    ],
+    "is_active": true,
+    "is_popular": false,
+    "sort_order": 0
+  },
+  "referral_plan": {
+    "id": -1,
+    "name": "Реферальный бонус",
+    "description": "Бонус за приглашение друзей",
+    "duration_days": 7,
+    "devices": 1,
+    "price": {
+      "RUB": 0,
+      "USD": 0,
+      "EUR": 0
+    },
+    "features": [
+      "1 устройство",
+      "Неограниченный трафик",
+      "Поддержка 24/7"
+    ],
+    "is_active": true,
+    "is_popular": false,
+    "sort_order": -1
+  }
+}

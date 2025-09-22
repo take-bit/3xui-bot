@@ -1,0 +1,136 @@
+{
+  "bot_token": "YOUR_BOT_TOKEN_HERE",
+  "bot_url": "https://yourdomain.com/webhook",
+  "log_level": "info",
+  "log_format": "json",
+  "database_url": "postgres://user:password@localhost:5432/3xui_bot?sslmode=disable",
+  "xui_servers": [
+    {
+      "id": 1,
+      "name": "Server 1",
+      "host": "192.168.1.100",
+      "port": 2053,
+      "username": "admin",
+      "password": "password",
+      "token": "",
+      "enabled": true,
+      "region": "US",
+      "priority": 1
+    }
+  ],
+  "payment_methods": {
+    "cryptomus": {
+      "enabled": true,
+      "merchant_id": "your_merchant_id",
+      "api_key": "your_api_key",
+      "webhook_secret": "your_webhook_secret"
+    },
+    "heleket": {
+      "enabled": true,
+      "api_key": "your_api_key",
+      "webhook_secret": "your_webhook_secret"
+    },
+    "yookassa": {
+      "enabled": true,
+      "shop_id": "your_shop_id",
+      "secret_key": "your_secret_key",
+      "webhook_secret": "your_webhook_secret"
+    },
+    "yoomoney": {
+      "enabled": true,
+      "receiver": "your_receiver",
+      "secret": "your_secret",
+      "webhook_secret": "your_webhook_secret"
+    },
+    "telegram_stars": {
+      "enabled": true,
+      "provider_token": "your_provider_token"
+    }
+  },
+  "trial_config": {
+    "enabled": true,
+    "duration_days": 3,
+    "referral_bonus_days": 7
+  },
+  "referral_config": {
+    "enabled": true,
+    "reward_percentage": 10,
+    "min_reward_amount": 100,
+    "max_reward_amount": 1000
+  },
+  "server_management": {
+    "health_check_interval": "30s",
+    "selection_strategy": "least_load",
+    "max_clients_per_server": 1000,
+    "auto_scale": true
+  },
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "read_timeout": "30s",
+    "write_timeout": "30s",
+    "idle_timeout": "60s"
+  },
+  "plans_config": {
+    "file_path": "plans.json",
+    "auto_reload": true,
+    "reload_interval": "1h"
+  },
+  "notifications_config": {
+    "telegram": {
+      "enabled": true,
+      "admin_chat_id": 123456789,
+      "support_chat_id": 987654321
+    },
+    "email": {
+      "enabled": false,
+      "smtp_host": "smtp.gmail.com",
+      "smtp_port": 587,
+      "username": "your_email@gmail.com",
+      "password": "your_password"
+    }
+  },
+  "security_config": {
+    "rate_limit": {
+      "enabled": true,
+      "requests_per_minute": 60,
+      "burst_size": 10
+    },
+    "jwt": {
+      "secret": "your_jwt_secret",
+      "expiration": "24h"
+    },
+    "encryption": {
+      "enabled": true,
+      "key": "your_encryption_key"
+    }
+  },
+  "performance_config": {
+    "database": {
+      "max_connections": 100,
+      "max_idle_connections": 10,
+      "connection_max_lifetime": "1h"
+    },
+    "cache": {
+      "enabled": true,
+      "type": "redis",
+      "host": "localhost",
+      "port": 6379,
+      "password": "",
+      "db": 0,
+      "ttl": "1h"
+    },
+    "memory": {
+      "max_memory_usage": 1073741824,
+      "gc_threshold": 536870912,
+      "enable_memory_profiling": false,
+      "profiling_interval": "5m"
+    },
+    "cpu": {
+      "max_cpu_usage": 80.0,
+      "enable_cpu_profiling": false,
+      "profiling_interval": "5m",
+      "worker_pool_size": 10
+    }
+  }
+}

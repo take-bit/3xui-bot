@@ -1,10 +1,17 @@
 # Repository Layer
 
-Этот пакет содержит реализацию репозиториев для работы с базой данных PostgreSQL.
+Слой репозиториев содержит реализации для работы с базой данных и внешними сервисами.
 
 ## Структура
 
-### Репозитории
+- **postgres/** - репозитории для работы с PostgreSQL
+- **client/** - клиенты для внешних API (3X-UI, платежи)
+- **repository.go** - интерфейсы и утилиты для работы с БД
+
+## PostgreSQL Repositories
+
+Пакет `postgres` содержит реализации репозиториев для работы с PostgreSQL:
+
 - `user_repository.go` - работа с пользователями
 - `subscription_repository.go` - работа с подписками
 - `plan_repository.go` - работа с планами
@@ -13,76 +20,81 @@
 - `promocode_repository.go` - работа с промокодами
 - `referral_repository.go` - работа с рефералами
 - `notification_repository.go` - работа с уведомлениями
+- `migrations.go` - SQL миграции для создания схемы БД
 
-### Базовые компоненты
-- `repository.go` - интерфейс DBGetter для работы с базой данных
-- `migrations.go` - миграции базы данных
+## External API Clients
 
-## Технологии
+Пакет `client` содержит клиенты для внешних API:
 
-- **PostgreSQL** - основная база данных
-- **pgx/v5** - драйвер PostgreSQL для Go
-- **transactor** - управление транзакциями
+- `xui_client.go` - клиент для работы с 3X-UI API
 
-## Использование
+## DBGetter Interface
+
+`DBGetter` - интерфейс для получения соединений с базой данных:
 
 ```go
-// Создание DBGetter (например, через transactor)
-dbGetter := transactor.NewTransactorFromPool(pool)
-
-// Создание репозиториев
-userRepo := NewUserRepository(dbGetter)
-subscriptionRepo := NewSubscriptionRepository(dbGetter)
-paymentRepo := NewPaymentRepository(dbGetter)
-
-// Выполнение миграций
-err = Migrate(ctx, pool)
-if err != nil {
-    log.Fatal(err)
-}
-
-// Использование репозитория
-user, err := userRepo.GetByTelegramID(ctx, 123456789)
-if err != nil {
-    log.Printf("Error: %v", err)
+type DBGetter interface {
+    GetDB(ctx context.Context) pgx.DB
 }
 ```
 
-## Транзакции
+### Реализации:
 
-Все репозитории поддерживают транзакции через `transactor`:
+- `PoolDBGetter` - для работы с пулом соединений
+- `TransactionDBGetter` - для работы в рамках транзакции
 
-```go
-// Выполнение в транзакции
-err := transactor.Transaction(ctx, func(ctx context.Context) error {
-    // Создание пользователя
-    user := &domain.User{...}
-    if err := userRepo.Create(ctx, user); err != nil {
-        return err
-    }
-    
-    // Создание подписки
-    subscription := &domain.Subscription{...}
-    if err := subscriptionRepo.Create(ctx, subscription); err != nil {
-        return err
-    }
-    
-    return nil
-})
-```
+## Примеры использования
 
-## Миграции
-
-Миграции выполняются автоматически при запуске приложения:
+### Создание репозиториев
 
 ```go
-// Выполнение миграций
-err = Migrate(ctx, pool)
+import (
+    "3xui-bot/internal/repository/postgres"
+    "3xui-bot/internal/repository/client"
+)
+
+// Создание репозитория пользователей
+userRepo := postgres.NewUserRepository(dbGetter)
+
+// Создание XUI клиента
+xuiConfig := client.XUIConfig{
+    BaseURL:  "https://your-3xui-panel.com",
+    Username: "admin",
+    Password: "password",
+    Timeout:  30 * time.Second,
+}
+xuiClient := client.NewXUIClient(xuiConfig)
 ```
 
-## Индексы
+### Работа с транзакциями
 
-Все таблицы имеют оптимизированные индексы для быстрого поиска:
-- Уникальные индексы для внешних ключей
-- Составные индексы для сложных запросов
-- Частичные индексы для активных записей
+```go
+// Создание транзакции
+tx, err := pool.Begin(ctx)
+if err != nil {
+    return err
+}
+defer tx.Rollback(ctx)
+
+// Создание DBGetter для транзакции
+txDBGetter := &TransactionDBGetter{tx: tx}
+
+// Использование репозиториев в транзакции
+userRepo := postgres.NewUserRepository(txDBGetter)
+subscriptionRepo := postgres.NewSubscriptionRepository(txDBGetter)
+
+// Выполнение операций
+// ...
+
+// Подтверждение транзакции
+return tx.Commit(ctx)
+```
+
+## Принципы
+
+1. **Интерфейсы** - все репозитории реализуют интерфейсы из `domain` пакета
+2. **DBGetter** - использование интерфейса для абстракции соединений с БД
+3. **Обработка ошибок** - использование `errors.Is()` и `errors.As()`
+4. **Доменные ошибки** - возврат специфических ошибок из `domain` пакета
+5. **Контекст** - все методы принимают `context.Context`
+6. **Транзакции** - поддержка работы в рамках транзакций
