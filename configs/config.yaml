@@ -1,0 +1,24 @@
+# Configuration file for 3xui-bot
+# Environment variables override these values
+
+bot:
+  token: "${BOT_TOKEN}"
+  debug: false
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "${DB_PASSWORD}"
+  database: "3xui_bot"
+  sslmode: "disable"
+
+marzban:
+  base_url: "http://localhost:8000"
+  username: "${MARZBAN_USERNAME}"
+  password: "${MARZBAN_PASSWORD}"
+
+app:
+  environment: "development"
+  log_level: "info"
+
