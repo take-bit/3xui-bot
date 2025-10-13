@@ -1,13 +1,14 @@
 package usecase
 
 import (
-	"3xui-bot/internal/ports"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"3xui-bot/internal/core"
 	"3xui-bot/internal/pkg/id"
+	"3xui-bot/internal/ports"
 )
 
 // VPNUseCase use case для работы с VPN
@@ -75,9 +76,12 @@ func (uc *VPNUseCase) GetActiveVPNConnections(ctx context.Context, telegramUserI
 
 // CreateVPNForSubscription создает VPN подключение для подписки (бизнес-логика)
 func (uc *VPNUseCase) CreateVPNForSubscription(ctx context.Context, userID int64, subscriptionID string) (*core.VPNConnection, error) {
+	slog.Info("Creating VPN for subscription", "user_id", userID, "subscription_id", subscriptionID)
+
 	// Получаем подписку
 	sub, err := uc.subRepo.GetSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
+		slog.Error("Failed to get subscription", "subscription_id", subscriptionID, "error", err)
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
@@ -87,23 +91,51 @@ func (uc *VPNUseCase) CreateVPNForSubscription(ctx context.Context, userID int64
 		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
 
+	// Получаем доступные inbounds из Marzban
+	inbounds, err := uc.marzbanRepo.GetInbounds(ctx)
+	if err != nil {
+		slog.Warn("Failed to get inbounds from Marzban, will try without specific inbounds", "error", err)
+		inbounds = nil
+	}
+
+	// Строим структуру inbounds для пользователя
+	userInbounds := uc.buildUserInbounds(inbounds)
+	slog.Debug("Built user inbounds", "inbounds", userInbounds)
+
 	// Генерируем уникальный username для Marzban
 	marzbanUsername := fmt.Sprintf("user_%d_%s", userID, id.GenerateShort())
 
-	// Создаем пользователя в Marzban
+	// Вычисляем срок действия из подписки
+	var expireTimestamp *int64
+	if !sub.EndDate.IsZero() {
+		timestamp := sub.EndDate.Unix()
+		expireTimestamp = &timestamp
+	}
+
+	// Используем лимит трафика (можно настроить позже в зависимости от плана)
 	dataLimit := int64(100 * 1024 * 1024 * 1024) // 100 GB по умолчанию
+
+	// Создаем пользователя в Marzban
 	marzbanUser := &core.MarzbanUserData{
 		Username:  marzbanUsername,
 		DataLimit: &dataLimit,
+		Expire:    expireTimestamp,
 		Status:    "active",
 		Note:      fmt.Sprintf("User %d - %s", userID, plan.Name),
+		Proxies: map[string]interface{}{
+			"vless": map[string]interface{}{},
+		},
+		Inbounds: userInbounds,
 	}
 
 	// Создаем в Marzban
 	_, err = uc.marzbanRepo.CreateUser(ctx, marzbanUser)
 	if err != nil {
+		slog.Error("Failed to create user in Marzban", "username", marzbanUsername, "error", err)
 		return nil, fmt.Errorf("failed to create user in Marzban: %w", err)
 	}
+
+	slog.Debug("Marzban user created", "username", marzbanUsername)
 
 	// Создаем запись в локальной БД
 	vpnConn := &core.VPNConnection{
@@ -217,6 +249,33 @@ func (uc *VPNUseCase) SyncVPNStatus(ctx context.Context, vpnID string) error {
 	}
 
 	return nil
+}
+
+// buildUserInbounds строит структуру inbounds для создания пользователя в Marzban
+func (uc *VPNUseCase) buildUserInbounds(inbounds []map[string]interface{}) map[string][]string {
+	if len(inbounds) == 0 {
+		// Если inbounds не получены, возвращаем пустую структуру
+		// Marzban может позволить создание без inbounds или использовать defaults
+		return make(map[string][]string)
+	}
+
+	// Группируем inbounds по протоколам
+	inboundsByProtocol := make(map[string][]string)
+
+	for _, inbound := range inbounds {
+		tag, hasTag := inbound["tag"].(string)
+		protocol, hasProtocol := inbound["protocol"].(string)
+
+		if hasTag && hasProtocol {
+			inboundsByProtocol[protocol] = append(inboundsByProtocol[protocol], tag)
+		} else if hasTag {
+			// Если нет протокола, используем первый доступный или vless по умолчанию
+			inboundsByProtocol["vless"] = append(inboundsByProtocol["vless"], tag)
+		}
+	}
+
+	slog.Debug("Inbounds grouped by protocol", "groups", inboundsByProtocol)
+	return inboundsByProtocol
 }
 
 // DeactivateExpiredVPNs деактивирует истекшие VPN подключения

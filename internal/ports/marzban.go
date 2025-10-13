@@ -11,6 +11,9 @@ type Marzban interface {
 	// Authenticate аутентифицируется в Marzban API
 	Authenticate(ctx context.Context) error
 
+	// GetInbounds получает список доступных inbound тегов
+	GetInbounds(ctx context.Context) ([]map[string]interface{}, error)
+
 	// CreateUser создает пользователя в Marzban
 	CreateUser(ctx context.Context, user *core.MarzbanUserData) (*core.MarzbanUserData, error)
 

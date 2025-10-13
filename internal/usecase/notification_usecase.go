@@ -1,14 +1,14 @@
 package usecase
 
 import (
-	"3xui-bot/internal/ports"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"3xui-bot/internal/core"
 	"3xui-bot/internal/pkg/id"
+	"3xui-bot/internal/ports"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -96,11 +96,11 @@ func (uc *NotificationUseCase) sendToTelegram(ctx context.Context, notification 
 	msg.ParseMode = "Markdown"
 
 	if _, err := uc.bot.Send(msg); err != nil {
-		log.Printf("Failed to send notification to user %d: %v", user.TelegramID, err)
+		slog.Error("Failed to send notification to user", "user_id", user.TelegramID, "error", err)
 		return fmt.Errorf("failed to send message: %w", err)
 	}
 
-	log.Printf("Notification sent to user %d: %s", user.TelegramID, notification.Title)
+	slog.Info("Notification sent to user", "user_id", user.TelegramID, "title", notification.Title)
 
 	return nil
 }

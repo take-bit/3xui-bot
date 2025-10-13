@@ -2,7 +2,7 @@ package app
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -47,7 +47,7 @@ func Run(ctx context.Context, container *Container) error {
 		case update := <-updates:
 			// Обрабатываем обновление через роутер
 			if err := container.Router.HandleUpdate(appCtx, update); err != nil {
-				log.Printf("Error processing update: %v", err)
+				slog.Error("Error processing update", "error", err)
 			}
 		}
 	}

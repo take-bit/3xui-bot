@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"3xui-bot/internal/ports"
@@ -34,7 +34,7 @@ func NewScheduler(
 
 // Start запускает все фоновые задачи
 func (s *Scheduler) Start(ctx context.Context) {
-	log.Println("Starting scheduler...")
+	slog.Info("Starting scheduler...")
 
 	// Проверка истекших подписок каждый час
 	go s.runPeriodically(ctx, time.Hour, s.CheckExpiredSubscriptions)
@@ -45,7 +45,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 	// Деактивация просроченных VPN (каждые 6 часов)
 	go s.runPeriodically(ctx, 6*time.Hour, s.DeactivateExpiredVPNs)
 
-	log.Println("Scheduler started successfully")
+	slog.Info("Scheduler started successfully")
 }
 
 // runPeriodically запускает функцию периодически
@@ -55,17 +55,17 @@ func (s *Scheduler) runPeriodically(ctx context.Context, interval time.Duration,
 
 	// Запускаем сразу при старте
 	if err := fn(ctx); err != nil {
-		log.Printf("Error in scheduled job: %v", err)
+		slog.Info("Error in scheduled job: %v", err)
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("Stopping scheduled job...")
+			slog.Info("Stopping scheduled job...")
 			return
 		case <-ticker.C:
 			if err := fn(ctx); err != nil {
-				log.Printf("Error in scheduled job: %v", err)
+				slog.Info("Error in scheduled job: %v", err)
 			}
 		}
 	}
@@ -73,7 +73,7 @@ func (s *Scheduler) runPeriodically(ctx context.Context, interval time.Duration,
 
 // CheckExpiredSubscriptions проверяет и деактивирует истекшие подписки
 func (s *Scheduler) CheckExpiredSubscriptions(ctx context.Context) error {
-	log.Println("Checking expired subscriptions...")
+	slog.Info("Checking expired subscriptions...")
 
 	// TODO: Реализовать получение всех активных подписок
 	// и деактивацию истекших
@@ -84,13 +84,13 @@ func (s *Scheduler) CheckExpiredSubscriptions(ctx context.Context) error {
 	// 3. Если истекла - деактивировать
 	// 4. Деактивировать связанные VPN
 
-	log.Println("Expired subscriptions check completed")
+	slog.Info("Expired subscriptions check completed")
 	return nil
 }
 
 // SendExpirationNotifications отправляет уведомления об истечении подписки
 func (s *Scheduler) SendExpirationNotifications(ctx context.Context) error {
-	log.Println("Sending expiration notifications...")
+	slog.Info("Sending expiration notifications...")
 
 	// TODO: Реализовать логику
 	// 1. Найти подписки, истекающие через 3 дня
@@ -113,32 +113,32 @@ func (s *Scheduler) SendExpirationNotifications(ctx context.Context) error {
 		}
 	*/
 
-	log.Println("Expiration notifications sent")
+	slog.Info("Expiration notifications sent")
 	return nil
 }
 
 // DeactivateExpiredVPNs деактивирует истекшие VPN подключения
 func (s *Scheduler) DeactivateExpiredVPNs(ctx context.Context) error {
-	log.Println("Deactivating expired VPNs...")
+	slog.Info("Deactivating expired VPNs...")
 
 	// Используем VPNUseCase для деактивации
 	if err := s.vpnUC.DeactivateExpiredVPNs(ctx); err != nil {
 		return err
 	}
 
-	log.Println("Expired VPNs deactivated")
+	slog.Info("Expired VPNs deactivated")
 	return nil
 }
 
 // CleanOldData очищает старые данные (опционально)
 func (s *Scheduler) CleanOldData(ctx context.Context) error {
-	log.Println("Cleaning old data...")
+	slog.Info("Cleaning old data...")
 
 	// TODO: Реализовать очистку:
 	// - Старых уведомлений (> 30 дней)
 	// - Отмененных платежей (> 90 дней)
 	// - Неактивных VPN (> 180 дней)
 
-	log.Println("Old data cleaned")
+	slog.Info("Old data cleaned")
 	return nil
 }

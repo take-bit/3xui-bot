@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
-	"log"
 
 	"3xui-bot/internal/usecase"
 
@@ -29,7 +29,7 @@ func NewPaymentHandler(
 
 // HandleSelectPlan обрабатывает выбор плана подписки
 func (h *PaymentHandler) HandleSelectPlan(ctx context.Context, userID int64, chatID int64, planID string) error {
-	log.Printf("User %d selected plan %s", userID, planID)
+	slog.Info("User %d selected plan %s", userID, planID)
 
 	// Создаем платеж через UseCase
 	payment, paymentURL, err := h.paymentUC.CreatePaymentForPlan(ctx, userID, planID)
@@ -72,7 +72,7 @@ func (h *PaymentHandler) HandleSelectPlan(ctx context.Context, userID int64, cha
 
 // HandlePaymentCheck обрабатывает проверку статуса платежа
 func (h *PaymentHandler) HandlePaymentCheck(ctx context.Context, userID int64, chatID int64, messageID int, paymentID string, planID string) error {
-	log.Printf("Checking payment %s for user %d", paymentID, userID)
+	slog.Info("Checking payment %s for user %d", paymentID, userID)
 
 	// Обрабатываем успешный платеж через UseCase (вся бизнес-логика внутри)
 	if err := h.paymentUC.ProcessPaymentSuccess(ctx, paymentID, planID); err != nil {
@@ -104,7 +104,7 @@ func (h *PaymentHandler) HandlePaymentCheck(ctx context.Context, userID int64, c
 
 // HandlePaymentCancel обрабатывает отмену платежа
 func (h *PaymentHandler) HandlePaymentCancel(ctx context.Context, userID int64, chatID int64, messageID int, paymentID string) error {
-	log.Printf("Cancelling payment %s for user %d", paymentID, userID)
+	slog.Info("Cancelling payment %s for user %d", paymentID, userID)
 
 	// Отменяем платеж через UseCase
 	if err := h.paymentUC.ProcessPaymentCancellation(ctx, paymentID); err != nil {
@@ -127,7 +127,7 @@ func (h *PaymentHandler) HandlePaymentCancel(ctx context.Context, userID int64, 
 // HandlePaymentWebhook обрабатывает webhook от платежной системы
 // TODO: Реализовать HTTP endpoint для webhook
 func (h *PaymentHandler) HandlePaymentWebhook(ctx context.Context, paymentID string, planID string, status string) error {
-	log.Printf("Received webhook for payment %s with status %s", paymentID, status)
+	slog.Info("Received webhook for payment %s with status %s", paymentID, status)
 
 	switch status {
 	case "succeeded", "completed":
@@ -137,7 +137,7 @@ func (h *PaymentHandler) HandlePaymentWebhook(ctx context.Context, paymentID str
 	case "cancelled", "canceled":
 		return h.paymentUC.ProcessPaymentCancellation(ctx, paymentID)
 	default:
-		log.Printf("Unknown payment status: %s", status)
+		slog.Info("Unknown payment status: %s", status)
 		return nil
 	}
 }

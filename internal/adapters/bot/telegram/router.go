@@ -1,8 +1,8 @@
 package telegram
 
 import (
+	"log/slog"
 	"context"
-	"log"
 
 	"3xui-bot/internal/adapters/bot/telegram/handlers"
 	"3xui-bot/internal/usecase"
@@ -89,7 +89,7 @@ func (r *Router) handleCommand(ctx context.Context, message *tgbotapi.Message) e
 func (r *Router) handleCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) error {
 	// Здесь должна быть логика маршрутизации callback
 	// TODO: Реализовать полную маршрутизацию
-	log.Printf("Callback: %s from user %d", callback.Data, callback.From.ID)
+	slog.Info("Callback: %s from user %d", callback.Data, callback.From.ID)
 	return nil
 }
 

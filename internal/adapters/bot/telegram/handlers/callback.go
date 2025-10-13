@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
-	"log"
 
 	"3xui-bot/internal/adapters/bot/telegram/ui"
 	"3xui-bot/internal/core"
@@ -38,12 +38,12 @@ func (h *CallbackHandler) Handle(ctx context.Context, update tgbotapi.Update) er
 	messageID := h.getMessageID(update)
 	callbackData := update.CallbackQuery.Data
 
-	log.Printf("Handling callback: %s for user %d", callbackData, userID)
+	slog.Info("Handling callback: %s for user %d", callbackData, userID)
 
 	// Отвечаем на callback query
 	err := h.answerCallbackQuery(ctx, update.CallbackQuery.ID, "", false)
 	if err != nil {
-		log.Printf("Error answering callback query: %v", err)
+		slog.Info("Error answering callback query: %v", err)
 	}
 
 	// Обрабатываем callback
@@ -89,7 +89,7 @@ func (h *CallbackHandler) Handle(ctx context.Context, update tgbotapi.Update) er
 // ============================================================================
 
 func (h *CallbackHandler) handleGetTrial(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling get trial for user %d", userID)
+	slog.Info("Handling get trial for user %d", userID)
 
 	// Активируем пробный доступ
 	success, err := h.activateTrial(ctx, userID)
@@ -110,14 +110,14 @@ func (h *CallbackHandler) handleGetTrial(ctx context.Context, userID, chatID int
 }
 
 func (h *CallbackHandler) handleOpenMenu(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling open menu for user %d", userID)
+	slog.Info("Handling open menu for user %d", userID)
 	text := ui.GetWelcomeText()
 	keyboard := ui.GetWelcomeKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleOpenProfile(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling open profile for user %d", userID)
+	slog.Info("Handling open profile for user %d", userID)
 
 	// Получаем пользователя
 	userObj, err := h.getUser(ctx, userID)
@@ -151,7 +151,7 @@ func (h *CallbackHandler) handleOpenProfile(ctx context.Context, userID, chatID 
 }
 
 func (h *CallbackHandler) handleOpenPricing(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling open pricing for user %d", userID)
+	slog.Info("Handling open pricing for user %d", userID)
 
 	// Получаем планы
 	plans, err := h.getPlans(ctx)
@@ -166,7 +166,7 @@ func (h *CallbackHandler) handleOpenPricing(ctx context.Context, userID, chatID 
 }
 
 func (h *CallbackHandler) handleMySubscriptions(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling my subscriptions for user %d", userID)
+	slog.Info("Handling my subscriptions for user %d", userID)
 
 	// Получаем подписки пользователя
 	subscriptions, err := h.getUserSubscriptions(ctx, userID)
@@ -181,7 +181,7 @@ func (h *CallbackHandler) handleMySubscriptions(ctx context.Context, userID, cha
 }
 
 func (h *CallbackHandler) handleCreateSubscription(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling create subscription for user %d", userID)
+	slog.Info("Handling create subscription for user %d", userID)
 
 	// Получаем планы
 	plans, err := h.getPlans(ctx)
@@ -196,62 +196,62 @@ func (h *CallbackHandler) handleCreateSubscription(ctx context.Context, userID, 
 }
 
 func (h *CallbackHandler) handleOpenKeys(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling open keys for user %d", userID)
+	slog.Info("Handling open keys for user %d", userID)
 	text := ui.GetKeysText()
 	keyboard := ui.GetKeysKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleOpenReferrals(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling open referrals for user %d", userID)
+	slog.Info("Handling open referrals for user %d", userID)
 	text := ui.GetReferralsText()
 	keyboard := ui.GetReferralsKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleOpenSupport(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling open support for user %d", userID)
+	slog.Info("Handling open support for user %d", userID)
 	text := ui.GetSupportText()
 	keyboard := ui.GetWelcomeKeyboard() // Используем базовую клавиатуру
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleMyConfigs(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling my configs for user %d", userID)
+	slog.Info("Handling my configs for user %d", userID)
 	text := "📋 Ваши VPN конфигурации\n\nПока конфигураций нет."
 	keyboard := ui.GetKeysKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleReferralStats(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling referral stats for user %d", userID)
+	slog.Info("Handling referral stats for user %d", userID)
 	text := "📊 Статистика рефералов\n\nПока статистики нет."
 	keyboard := ui.GetReferralsKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleMyReferrals(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling my referrals for user %d", userID)
+	slog.Info("Handling my referrals for user %d", userID)
 	text := "👥 Ваши рефералы\n\nПока рефералов нет."
 	keyboard := ui.GetReferralsKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleMyReferralLink(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling my referral link for user %d", userID)
+	slog.Info("Handling my referral link for user %d", userID)
 	text := "🔗 Ваша реферальная ссылка\n\nhttps://t.me/your_bot?start=ref_123456"
 	keyboard := ui.GetReferralsKeyboard()
 	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *CallbackHandler) handleCreateWireguard(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling create wireguard for user %d", userID)
+	slog.Info("Handling create wireguard for user %d", userID)
 	text := "🔑 Создание WireGuard конфигурации\n\nВведите название для конфигурации:"
 	return h.sendMessage(ctx, chatID, text)
 }
 
 func (h *CallbackHandler) handleCreateShadowsocks(ctx context.Context, userID, chatID int64, messageID int) error {
-	log.Printf("Handling create shadowsocks for user %d", userID)
+	slog.Info("Handling create shadowsocks for user %d", userID)
 	text := "🔑 Создание Shadowsocks конфигурации\n\nВведите название для конфигурации:"
 	return h.sendMessage(ctx, chatID, text)
 }
@@ -261,7 +261,7 @@ func (h *CallbackHandler) handleCreateShadowsocks(ctx context.Context, userID, c
 // ============================================================================
 
 func (h *CallbackHandler) handleParameterizedCallback(ctx context.Context, userID, chatID int64, messageID int, callbackData string) error {
-	log.Printf("Handling parameterized callback: %s for user %d", callbackData, userID)
+	slog.Info("Handling parameterized callback: %s for user %d", callbackData, userID)
 
 	// Планы подписок
 	if planID, ok := ui.ParsePlanCallback(callbackData); ok {
@@ -303,7 +303,7 @@ func (h *CallbackHandler) handleParameterizedCallback(ctx context.Context, userI
 }
 
 func (h *CallbackHandler) handlePlanSelection(ctx context.Context, userID, chatID int64, messageID int, planID string) error {
-	log.Printf("Handling plan selection %s for user %d", planID, userID)
+	slog.Info("Handling plan selection %s for user %d", planID, userID)
 
 	// Получаем план
 	plan, err := h.getPlan(ctx, planID)
@@ -318,7 +318,7 @@ func (h *CallbackHandler) handlePlanSelection(ctx context.Context, userID, chatI
 }
 
 func (h *CallbackHandler) handleCreateSubscriptionByPlan(ctx context.Context, userID, chatID int64, messageID int, planID string) error {
-	log.Printf("Handling create subscription by plan %s for user %d", planID, userID)
+	slog.Info("Handling create subscription by plan %s for user %d", planID, userID)
 
 	// Получаем план
 	plan, err := h.getPlan(ctx, planID)
@@ -347,7 +347,7 @@ func (h *CallbackHandler) handleCreateSubscriptionByPlan(ctx context.Context, us
 }
 
 func (h *CallbackHandler) handleViewSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	log.Printf("Handling view subscription %s for user %d", subscriptionID, userID)
+	slog.Info("Handling view subscription %s for user %d", subscriptionID, userID)
 
 	// Получаем подписку
 	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
@@ -362,7 +362,7 @@ func (h *CallbackHandler) handleViewSubscription(ctx context.Context, userID, ch
 }
 
 func (h *CallbackHandler) handleRenameSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	log.Printf("Handling rename subscription %s for user %d", subscriptionID, userID)
+	slog.Info("Handling rename subscription %s for user %d", subscriptionID, userID)
 
 	// Получаем подписку
 	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
@@ -376,7 +376,7 @@ func (h *CallbackHandler) handleRenameSubscription(ctx context.Context, userID, 
 }
 
 func (h *CallbackHandler) handleExtendSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	log.Printf("Handling extend subscription %s for user %d", subscriptionID, userID)
+	slog.Info("Handling extend subscription %s for user %d", subscriptionID, userID)
 
 	// Получаем подписку
 	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
@@ -398,7 +398,7 @@ func (h *CallbackHandler) handleExtendSubscription(ctx context.Context, userID, 
 }
 
 func (h *CallbackHandler) handleDeleteSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	log.Printf("Handling delete subscription %s for user %d", subscriptionID, userID)
+	slog.Info("Handling delete subscription %s for user %d", subscriptionID, userID)
 
 	// Получаем подписку
 	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
@@ -413,7 +413,7 @@ func (h *CallbackHandler) handleDeleteSubscription(ctx context.Context, userID, 
 }
 
 func (h *CallbackHandler) handleExtendSubscriptionByPlan(ctx context.Context, userID, chatID int64, messageID int, planID, subscriptionID string) error {
-	log.Printf("Handling extend subscription %s by plan %s for user %d", subscriptionID, planID, userID)
+	slog.Info("Handling extend subscription %s by plan %s for user %d", subscriptionID, planID, userID)
 
 	// Получаем план
 	plan, err := h.getPlan(ctx, planID)

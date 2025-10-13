@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"3xui-bot/internal/core"
@@ -41,22 +42,17 @@ func (m *MarzbanRepository) Authenticate(ctx context.Context) error {
 
 // Login выполняет аутентификацию в Marzban API
 func (m *MarzbanRepository) Login(ctx context.Context) error {
-	loginData := map[string]string{
-		"username": m.username,
-		"password": m.password,
-	}
+	// Marzban использует OAuth2 форму (application/x-www-form-urlencoded), а не JSON
+	formData := url.Values{}
+	formData.Set("username", m.username)
+	formData.Set("password", m.password)
 
-	jsonData, err := json.Marshal(loginData)
-	if err != nil {
-		return fmt.Errorf("failed to marshal login data: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", m.baseURL+"/api/admin/token", bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", m.baseURL+"/api/admin/token", bytes.NewBufferString(formData.Encode()))
 	if err != nil {
 		return fmt.Errorf("failed to create login request: %w", err)
 	}
 
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := m.httpClient.Do(req)
 	if err != nil {
@@ -157,14 +153,16 @@ func (m *MarzbanRepository) CreateUser(ctx context.Context, userData *core.Marzb
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
+	// Читаем тело ответа для логирования
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to create user with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	var createdUser core.MarzbanUserData
-	if err := json.NewDecoder(resp.Body).Decode(&createdUser); err != nil {
-		return nil, fmt.Errorf("failed to decode user response: %w", err)
+	if err := json.Unmarshal(body, &createdUser); err != nil {
+		return nil, fmt.Errorf("failed to decode user response: %w, body: %s", err, string(body))
 	}
 
 	return &createdUser, nil
@@ -306,6 +304,49 @@ func (m *MarzbanRepository) GetUserUsage(ctx context.Context, username string) (
 	}
 
 	return usage, nil
+}
+
+// GetInbounds получает список доступных inbounds
+func (m *MarzbanRepository) GetInbounds(ctx context.Context) ([]map[string]interface{}, error) {
+	resp, err := m.makeRequest(ctx, "GET", "/api/inbounds", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get inbounds with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// API может вернуть либо массив, либо объект с массивом внутри
+	// Сначала пробуем как массив
+	var inboundsArray []map[string]interface{}
+	if err := json.Unmarshal(body, &inboundsArray); err == nil {
+		return inboundsArray, nil
+	}
+
+	// Если не массив, пробуем как объект с полем (например, {"inbounds": [...]})
+	var inboundsObject map[string]interface{}
+	if err := json.Unmarshal(body, &inboundsObject); err != nil {
+		return nil, fmt.Errorf("failed to decode inbounds response: %w, body: %s", err, string(body))
+	}
+
+	// Ищем массив в объекте
+	for _, value := range inboundsObject {
+		if arr, ok := value.([]interface{}); ok {
+			result := make([]map[string]interface{}, 0, len(arr))
+			for _, item := range arr {
+				if m, ok := item.(map[string]interface{}); ok {
+					result = append(result, m)
+				}
+			}
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("unexpected inbounds response format: %s", string(body))
 }
 
 // GetStats получает статистику системы

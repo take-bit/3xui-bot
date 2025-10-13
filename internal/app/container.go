@@ -54,11 +54,10 @@ type Container struct {
 }
 
 // NewContainer создает и инициализирует контейнер зависимостей
-func NewContainer(ctx context.Context) (*Container, error) {
+func NewContainer(ctx context.Context, configPath string) (*Container, error) {
 	c := &Container{}
-
-	// 1. Загружаем конфигурацию
-	cfg, err := config.Load()
+	
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -69,7 +68,11 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	c.Logger.Info("Configuration loaded successfully")
 
 	// 3. Подключаемся к БД
-	pool, err := pgxpool.New(ctx, cfg.DB.GetConnectionString())
+	connectionString := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Database, cfg.DB.SSLMode,
+	)
+	pool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database pool: %w", err)
 	}
@@ -82,7 +85,7 @@ func NewContainer(ctx context.Context) (*Container, error) {
 	c.DB = pool
 
 	transactor, dbGetter := transactorPgx.NewTransactorFromPool(pool)
-	c.UoW = postgres.NewUoW(transactor)
+	c.UnitOfWork = postgres.NewUoW(transactor)
 
 	c.DBGetter = dbGetter
 	c.Logger.Info("Database connected successfully")

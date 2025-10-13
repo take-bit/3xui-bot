@@ -1,0 +1,27 @@
+{
+  "bot": {
+    "debug": false,
+    "timeout": 30,
+    "updates_channel_size": 100,
+    "max_concurrent": 4,
+    "admin_ids": [],
+    "support_username": ""
+  },
+  "db": {
+    "host": "localhost",
+    "port": "5432",
+    "database": "3xui_bot",
+    "sslmode": "disable"
+  },
+  "marzban": {
+    "base_url": "https://your-marzban-server.com"
+  },
+  "payment": {},
+  "scheduler": {
+    "enabled": true
+  },
+  "logging": {
+    "level": "info"
+  }
+}
+

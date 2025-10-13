@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"log/slog"
 	"3xui-bot/internal/adapters/bot/telegram/ui"
 	"context"
-	"log"
 
 	"3xui-bot/internal/usecase"
 
@@ -30,7 +30,7 @@ func (h *StartHandler) Handle(ctx context.Context, update tgbotapi.Update) error
 	userID := h.getUserID(update)
 	chatID := h.getChatID(update)
 
-	log.Printf("Handling /start command for user %d", userID)
+	slog.Info("Handling /start command for user %d", userID)
 
 	// Создаем пользователя
 	createUserDTO := usecase.CreateUserDTO{

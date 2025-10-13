@@ -1,9 +1,9 @@
 package handlers
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
-	"log"
 	"strings"
 
 	"3xui-bot/internal/usecase"
@@ -30,7 +30,7 @@ func NewVPNHandler(
 
 // HandleShowVPNs показывает список VPN подключений пользователя
 func (h *VPNHandler) HandleShowVPNs(ctx context.Context, userID int64, chatID int64) error {
-	log.Printf("Showing VPNs for user %d", userID)
+	slog.Info("Showing VPNs for user %d", userID)
 
 	// Получаем VPN подключения с данными из Marzban через UseCase
 	vpns, err := h.vpnUC.GetUserVPNWithStats(ctx, userID)
@@ -112,7 +112,7 @@ func (h *VPNHandler) HandleShowVPNs(ctx context.Context, userID int64, chatID in
 
 // HandleGetVPNConfig отправляет конфигурацию VPN
 func (h *VPNHandler) HandleGetVPNConfig(ctx context.Context, userID int64, chatID int64, vpnID string) error {
-	log.Printf("Getting VPN config %s for user %d", vpnID, userID)
+	slog.Info("Getting VPN config %s for user %d", vpnID, userID)
 
 	// Получаем VPN подключение через UseCase
 	vpn, err := h.vpnUC.GetVPNConnectionWithStats(ctx, vpnID)
@@ -170,7 +170,7 @@ func (h *VPNHandler) HandleGetVPNConfig(ctx context.Context, userID int64, chatI
 
 // HandleVPNStats показывает статистику VPN
 func (h *VPNHandler) HandleVPNStats(ctx context.Context, userID int64, chatID int64, messageID int, vpnID string) error {
-	log.Printf("Showing stats for VPN %s", vpnID)
+	slog.Info("Showing stats for VPN %s", vpnID)
 
 	// Получаем VPN с актуальными данными через UseCase
 	vpn, err := h.vpnUC.GetVPNConnectionWithStats(ctx, vpnID)
@@ -227,7 +227,7 @@ func (h *VPNHandler) HandleVPNStats(ctx context.Context, userID int64, chatID in
 
 // HandleVPNRefresh обновляет данные VPN из Marzban
 func (h *VPNHandler) HandleVPNRefresh(ctx context.Context, userID int64, chatID int64, messageID int, vpnID string) error {
-	log.Printf("Refreshing VPN %s", vpnID)
+	slog.Info("Refreshing VPN %s", vpnID)
 
 	// Синхронизируем с Marzban через UseCase
 	if err := h.vpnUC.SyncVPNStatus(ctx, vpnID); err != nil {

@@ -1,8 +1,8 @@
 package telegram
 
 import (
+	"log/slog"
 	"context"
-	"log"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -26,15 +26,15 @@ func LoggingMiddleware(next Handler) Handler {
 			userID = update.CallbackQuery.From.ID
 		}
 
-		log.Printf("[Middleware] Processing update from user %d", userID)
+		slog.Info("[Middleware] Processing update from user %d", userID)
 
 		err := next(ctx, update)
 
 		duration := time.Since(start)
 		if err != nil {
-			log.Printf("[Middleware] Error processing update: %v (took %v)", err, duration)
+			slog.Info("[Middleware] Error processing update: %v (took %v)", err, duration)
 		} else {
-			log.Printf("[Middleware] Successfully processed update (took %v)", duration)
+			slog.Info("[Middleware] Successfully processed update (took %v)", duration)
 		}
 
 		return err
@@ -46,7 +46,7 @@ func RecoveryMiddleware(next Handler) Handler {
 	return func(ctx context.Context, update tgbotapi.Update) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("[Recovery] Panic recovered: %v", r)
+				slog.Info("[Recovery] Panic recovered: %v", r)
 				err = nil // Не роняем бота
 			}
 		}()
