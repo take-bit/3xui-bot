@@ -1,12 +1,13 @@
 package handlers
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 
 	"3xui-bot/internal/adapters/bot/telegram/ui"
 	"3xui-bot/internal/core"
+	"3xui-bot/internal/ports"
 	"3xui-bot/internal/usecase"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -14,12 +15,59 @@ import (
 
 // CallbackHandler обрабатывает все callback query
 type CallbackHandler struct {
-	controller interface{}
+	userUC *usecase.UserUseCase
+	subUC  *usecase.SubscriptionUseCase
+	vpnUC  *usecase.VPNUseCase
+	bot    ports.BotPort
+	log    *slog.Logger
+	route  map[string]func(context.Context, meta) error
 }
 
-// NewCallbackHandler создает новый обработчик callback'ов
-func NewCallbackHandler(controller interface{}) *CallbackHandler {
-	return &CallbackHandler{controller: controller}
+// meta содержит метаданные callback query
+type meta struct {
+	userID    int64
+	chatID    int64
+	messageID int
+	cbID      string
+	data      string
+}
+
+// NewCallbackHandler создает новый типобезопасный обработчик callback'ов
+func NewCallbackHandler(
+	userUC *usecase.UserUseCase,
+	subUC *usecase.SubscriptionUseCase,
+	vpnUC *usecase.VPNUseCase,
+	bot ports.BotPort,
+	log *slog.Logger,
+) *CallbackHandler {
+	h := &CallbackHandler{
+		userUC: userUC,
+		subUC:  subUC,
+		vpnUC:  vpnUC,
+		bot:    bot,
+		log:    log,
+	}
+
+	// Регистрируем роуты для простых (непараметризованных) callback'ов
+	h.route = map[string]func(context.Context, meta) error{
+		"get_trial":           h.handleGetTrial,
+		"open_menu":           h.handleOpenMenu,
+		"open_profile":        h.handleOpenProfile,
+		"open_pricing":        h.handleOpenPricing,
+		"my_subscriptions":    h.handleMySubscriptions,
+		"create_subscription": h.handleCreateSubscription,
+		"open_keys":           h.handleOpenKeys,
+		"open_referrals":      h.handleOpenReferrals,
+		"open_support":        h.handleOpenSupport,
+		"my_configs":          h.handleMyConfigs,
+		"referral_stats":      h.handleReferralStats,
+		"my_referrals":        h.handleMyReferrals,
+		"my_referral_link":    h.handleMyReferralLink,
+		"create_wireguard":    h.handleCreateWireguard,
+		"create_shadowsocks":  h.handleCreateShadowsocks,
+	}
+
+	return h
 }
 
 // CanHandle проверяет, может ли обработчик обработать обновление
@@ -28,73 +76,91 @@ func (h *CallbackHandler) CanHandle(update tgbotapi.Update) bool {
 }
 
 // Handle обрабатывает callback query
-func (h *CallbackHandler) Handle(ctx context.Context, update tgbotapi.Update) error {
-	if update.CallbackQuery == nil {
+func (h *CallbackHandler) Handle(ctx context.Context, upd tgbotapi.Update) error {
+	cb := upd.CallbackQuery
+	if cb == nil {
 		return nil
 	}
 
-	userID := h.getUserID(update)
-	chatID := h.getChatID(update)
-	messageID := h.getMessageID(update)
-	callbackData := update.CallbackQuery.Data
-
-	slog.Info("Handling callback: %s for user %d", callbackData, userID)
-
-	// Отвечаем на callback query
-	err := h.answerCallbackQuery(ctx, update.CallbackQuery.ID, "", false)
-	if err != nil {
-		slog.Info("Error answering callback query: %v", err)
+	m := meta{
+		userID:    cb.From.ID,
+		chatID:    cb.Message.Chat.ID,
+		messageID: cb.Message.MessageID,
+		cbID:      cb.ID,
+		data:      cb.Data,
 	}
 
-	// Обрабатываем callback
-	switch callbackData {
-	// Основные команды
-	case "get_trial":
-		return h.handleGetTrial(ctx, userID, chatID, messageID)
-	case "open_menu":
-		return h.handleOpenMenu(ctx, userID, chatID, messageID)
-	case "open_profile":
-		return h.handleOpenProfile(ctx, userID, chatID, messageID)
-	case "open_pricing":
-		return h.handleOpenPricing(ctx, userID, chatID, messageID)
-	case "my_subscriptions":
-		return h.handleMySubscriptions(ctx, userID, chatID, messageID)
-	case "create_subscription":
-		return h.handleCreateSubscription(ctx, userID, chatID, messageID)
-	case "open_keys":
-		return h.handleOpenKeys(ctx, userID, chatID, messageID)
-	case "open_referrals":
-		return h.handleOpenReferrals(ctx, userID, chatID, messageID)
-	case "open_support":
-		return h.handleOpenSupport(ctx, userID, chatID, messageID)
-	case "my_configs":
-		return h.handleMyConfigs(ctx, userID, chatID, messageID)
-	case "referral_stats":
-		return h.handleReferralStats(ctx, userID, chatID, messageID)
-	case "my_referrals":
-		return h.handleMyReferrals(ctx, userID, chatID, messageID)
-	case "my_referral_link":
-		return h.handleMyReferralLink(ctx, userID, chatID, messageID)
-	case "create_wireguard":
-		return h.handleCreateWireguard(ctx, userID, chatID, messageID)
-	case "create_shadowsocks":
-		return h.handleCreateShadowsocks(ctx, userID, chatID, messageID)
-	default:
-		return h.handleParameterizedCallback(ctx, userID, chatID, messageID, callbackData)
+	h.info("Handling callback", "data", m.data, "user_id", m.userID)
+
+	// Проверяем простые роуты
+	if fn, ok := h.route[m.data]; ok {
+		return fn(ctx, m)
 	}
+
+	// Параметризованные колбэки
+	if planID, ok := ui.ParsePlanCallback(m.data); ok {
+		return h.handlePlanSelection(ctx, m, planID)
+	}
+	if planID, ok := ui.ParseSelectPlanCallback(m.data); ok {
+		return h.handlePlanSelection(ctx, m, planID)
+	}
+	if planID, ok := ui.ParseCreatePlanCallback(m.data); ok {
+		return h.handleCreateSubscriptionByPlan(ctx, m, planID)
+	}
+	if subID, ok := ui.ParseViewSubscriptionCallback(m.data); ok {
+		return h.handleViewSubscription(ctx, m, subID)
+	}
+	if subID, ok := ui.ParseRenameSubscriptionCallback(m.data); ok {
+		return h.handleRenameSubscription(ctx, m, subID)
+	}
+	if subID, ok := ui.ParseExtendSubscriptionCallback(m.data); ok {
+		return h.handleExtendSubscription(ctx, m, subID)
+	}
+	if subID, ok := ui.ParseDeleteSubscriptionCallback(m.data); ok {
+		return h.handleDeleteSubscription(ctx, m, subID)
+	}
+	if planID, subID, ok := ui.ParseExtendPlanCallback(m.data); ok {
+		return h.handleExtendSubscriptionByPlan(ctx, m, planID, subID)
+	}
+	if planID, ok := ui.ParsePayCardCallback(m.data); ok {
+		return h.handlePayCard(ctx, m, planID)
+	}
+	if planID, ok := ui.ParsePaySBPCallback(m.data); ok {
+		return h.handlePaySBP(ctx, m, planID)
+	}
+	if planID, ok := ui.ParsePayStarsCallback(m.data); ok {
+		return h.handlePayStars(ctx, m, planID)
+	}
+	if configID, ok := ui.ParseViewConfigCallback(m.data); ok {
+		return h.handleViewConfig(ctx, m, configID)
+	}
+	if subID, ok := ui.ParseConnectionGuideCallback(m.data); ok {
+		return h.handleConnectionGuide(ctx, m, subID)
+	}
+
+	// Неизвестная команда
+	h.warn("Unknown callback", "data", m.data)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, "❓ Неизвестная команда", ui.GetUnknownCommandKeyboard())
 }
 
 // ============================================================================
 // ОСНОВНЫЕ ОБРАБОТЧИКИ
 // ============================================================================
 
-func (h *CallbackHandler) handleGetTrial(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling get trial for user %d", userID)
+func (h *CallbackHandler) handleGetTrial(ctx context.Context, m meta) error {
+	h.info("Handle get trial", "user_id", m.userID)
+
+	// Получаем пользователя
+	user, err := h.userUC.GetUser(ctx, m.userID)
+	if err != nil || user == nil {
+		h.err("GetUser", err)
+		return err
+	}
 
 	// Активируем пробный доступ
-	success, err := h.activateTrial(ctx, userID)
+	success, err := h.userUC.ActivateTrial(ctx, m.userID)
 	if err != nil {
-		h.logError(err, "ActivateTrial")
+		h.err("ActivateTrial", err)
 		return err
 	}
 
@@ -105,38 +171,39 @@ func (h *CallbackHandler) handleGetTrial(ctx context.Context, userID, chatID int
 		text = "❌ Пробный доступ уже был использован"
 	}
 
-	keyboard := ui.GetWelcomeKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetWelcomeKeyboard(user.HasTrial))
 }
 
-func (h *CallbackHandler) handleOpenMenu(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling open menu for user %d", userID)
-	text := ui.GetWelcomeText()
-	keyboard := ui.GetWelcomeKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
+func (h *CallbackHandler) handleOpenMenu(ctx context.Context, m meta) error {
+	h.info("Handle open menu", "user_id", m.userID)
 
-func (h *CallbackHandler) handleOpenProfile(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling open profile for user %d", userID)
-
-	// Получаем пользователя
-	userObj, err := h.getUser(ctx, userID)
-	if err != nil {
-		h.logError(err, "GetUser")
+	user, err := h.userUC.GetUser(ctx, m.userID)
+	if err != nil || user == nil {
+		h.err("GetUser", err)
 		return err
 	}
 
-	user := userObj.(*core.User)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, ui.GetWelcomeText(user.FirstName, user.HasTrial), ui.GetWelcomeKeyboard(user.HasTrial))
+}
+
+func (h *CallbackHandler) handleOpenProfile(ctx context.Context, m meta) error {
+	h.info("Handle open profile", "user_id", m.userID)
+
+	user, err := h.userUC.GetUser(ctx, m.userID)
+	if err != nil || user == nil {
+		h.err("GetUser", err)
+		return err
+	}
 
 	// Проверяем наличие активной подписки
-	subsObj, _ := h.getUserSubscriptions(ctx, userID)
+	subscriptions, _ := h.subUC.GetUserSubscriptions(ctx, m.userID)
 	isPremium := false
 	statusText := "Free"
 	subUntilText := "—"
 
-	if len(subsObj) > 0 {
-		for _, sub := range subsObj {
-			if !sub.IsExpired() {
+	if len(subscriptions) > 0 {
+		for _, sub := range subscriptions {
+			if sub.IsActive {
 				isPremium = true
 				statusText = "Premium"
 				subUntilText = sub.EndDate.Format("02.01.2006")
@@ -147,434 +214,428 @@ func (h *CallbackHandler) handleOpenProfile(ctx context.Context, userID, chatID 
 
 	text := ui.GetProfileText(user, isPremium, statusText, subUntilText)
 	keyboard := ui.GetProfileKeyboard(isPremium)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, keyboard)
 }
 
-func (h *CallbackHandler) handleOpenPricing(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling open pricing for user %d", userID)
+func (h *CallbackHandler) handleOpenPricing(ctx context.Context, m meta) error {
+	h.info("Handle open pricing", "user_id", m.userID)
 
-	// Получаем планы
-	plans, err := h.getPlans(ctx)
+	plans, err := h.subUC.GetPlans(ctx)
 	if err != nil {
-		h.logError(err, "GetPlans")
+		h.err("GetPlans", err)
 		return err
 	}
 
-	text := ui.GetPricingText(plans)
-	keyboard := ui.GetPricingKeyboard(plans)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, ui.GetPricingText(plans), ui.GetPricingKeyboard(plans))
 }
 
-func (h *CallbackHandler) handleMySubscriptions(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling my subscriptions for user %d", userID)
+func (h *CallbackHandler) handleMySubscriptions(ctx context.Context, m meta) error {
+	h.info("Handle my subscriptions", "user_id", m.userID)
 
-	// Получаем подписки пользователя
-	subscriptions, err := h.getUserSubscriptions(ctx, userID)
+	subscriptions, err := h.subUC.GetUserSubscriptions(ctx, m.userID)
 	if err != nil {
-		h.logError(err, "GetUserSubscriptions")
+		h.err("GetUserSubscriptions", err)
 		return err
 	}
 
-	text := ui.GetSubscriptionsText(subscriptions)
-	keyboard := ui.GetSubscriptionsKeyboard(subscriptions)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, ui.GetSubscriptionsText(subscriptions), ui.GetSubscriptionsKeyboard(subscriptions))
 }
 
-func (h *CallbackHandler) handleCreateSubscription(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling create subscription for user %d", userID)
+func (h *CallbackHandler) handleCreateSubscription(ctx context.Context, m meta) error {
+	h.info("Handle create subscription", "user_id", m.userID)
 
-	// Получаем планы
-	plans, err := h.getPlans(ctx)
+	plans, err := h.subUC.GetPlans(ctx)
 	if err != nil {
-		h.logError(err, "GetPlans")
+		h.err("GetPlans", err)
 		return err
 	}
 
 	text := ui.GetCreateSubscriptionText()
 	keyboard := ui.GetCreateSubscriptionKeyboard(plans)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, keyboard)
 }
 
-func (h *CallbackHandler) handleOpenKeys(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling open keys for user %d", userID)
-	text := ui.GetKeysText()
-	keyboard := ui.GetKeysKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+func (h *CallbackHandler) handleOpenKeys(ctx context.Context, m meta) error {
+	h.info("Handle open keys", "user_id", m.userID)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, ui.GetKeysText(), ui.GetKeysKeyboard())
 }
 
-func (h *CallbackHandler) handleOpenReferrals(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling open referrals for user %d", userID)
-	text := ui.GetReferralsText()
-	keyboard := ui.GetReferralsKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+func (h *CallbackHandler) handleOpenReferrals(ctx context.Context, m meta) error {
+	h.info("Handle open referrals", "user_id", m.userID)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, ui.GetReferralsText(), ui.GetReferralsKeyboard())
 }
 
-func (h *CallbackHandler) handleOpenSupport(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling open support for user %d", userID)
-	text := ui.GetSupportText()
-	keyboard := ui.GetWelcomeKeyboard() // Используем базовую клавиатуру
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
+func (h *CallbackHandler) handleOpenSupport(ctx context.Context, m meta) error {
+	h.info("Handle open support", "user_id", m.userID)
 
-func (h *CallbackHandler) handleMyConfigs(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling my configs for user %d", userID)
-	text := "📋 Ваши VPN конфигурации\n\nПока конфигураций нет."
-	keyboard := ui.GetKeysKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
-
-func (h *CallbackHandler) handleReferralStats(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling referral stats for user %d", userID)
-	text := "📊 Статистика рефералов\n\nПока статистики нет."
-	keyboard := ui.GetReferralsKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
-
-func (h *CallbackHandler) handleMyReferrals(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling my referrals for user %d", userID)
-	text := "👥 Ваши рефералы\n\nПока рефералов нет."
-	keyboard := ui.GetReferralsKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
-
-func (h *CallbackHandler) handleMyReferralLink(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling my referral link for user %d", userID)
-	text := "🔗 Ваша реферальная ссылка\n\nhttps://t.me/your_bot?start=ref_123456"
-	keyboard := ui.GetReferralsKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
-
-func (h *CallbackHandler) handleCreateWireguard(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling create wireguard for user %d", userID)
-	text := "🔑 Создание WireGuard конфигурации\n\nВведите название для конфигурации:"
-	return h.sendMessage(ctx, chatID, text)
-}
-
-func (h *CallbackHandler) handleCreateShadowsocks(ctx context.Context, userID, chatID int64, messageID int) error {
-	slog.Info("Handling create shadowsocks for user %d", userID)
-	text := "🔑 Создание Shadowsocks конфигурации\n\nВведите название для конфигурации:"
-	return h.sendMessage(ctx, chatID, text)
-}
-
-// ============================================================================
-// ОБРАБОТЧИКИ ПАРАМЕТРИЗОВАННЫХ CALLBACK'ОВ
-// ============================================================================
-
-func (h *CallbackHandler) handleParameterizedCallback(ctx context.Context, userID, chatID int64, messageID int, callbackData string) error {
-	slog.Info("Handling parameterized callback: %s for user %d", callbackData, userID)
-
-	// Планы подписок
-	if planID, ok := ui.ParsePlanCallback(callbackData); ok {
-		return h.handlePlanSelection(ctx, userID, chatID, messageID, planID)
-	}
-
-	// Создание подписки по плану
-	if planID, ok := ui.ParseCreatePlanCallback(callbackData); ok {
-		return h.handleCreateSubscriptionByPlan(ctx, userID, chatID, messageID, planID)
-	}
-
-	// Просмотр подписки
-	if subscriptionID, ok := ui.ParseViewSubscriptionCallback(callbackData); ok {
-		return h.handleViewSubscription(ctx, userID, chatID, messageID, subscriptionID)
-	}
-
-	// Переименование подписки
-	if subscriptionID, ok := ui.ParseRenameSubscriptionCallback(callbackData); ok {
-		return h.handleRenameSubscription(ctx, userID, chatID, messageID, subscriptionID)
-	}
-
-	// Продление подписки
-	if subscriptionID, ok := ui.ParseExtendSubscriptionCallback(callbackData); ok {
-		return h.handleExtendSubscription(ctx, userID, chatID, messageID, subscriptionID)
-	}
-
-	// Удаление подписки
-	if subscriptionID, ok := ui.ParseDeleteSubscriptionCallback(callbackData); ok {
-		return h.handleDeleteSubscription(ctx, userID, chatID, messageID, subscriptionID)
-	}
-
-	// Продление подписки по плану
-	if planID, subscriptionID, ok := ui.ParseExtendPlanCallback(callbackData); ok {
-		return h.handleExtendSubscriptionByPlan(ctx, userID, chatID, messageID, planID, subscriptionID)
-	}
-
-	text := "❓ Неизвестная команда"
-	return h.editMessageText(ctx, chatID, messageID, text, nil)
-}
-
-func (h *CallbackHandler) handlePlanSelection(ctx context.Context, userID, chatID int64, messageID int, planID string) error {
-	slog.Info("Handling plan selection %s for user %d", planID, userID)
-
-	// Получаем план
-	plan, err := h.getPlan(ctx, planID)
-	if err != nil {
-		h.logError(err, "GetPlan")
+	user, err := h.userUC.GetUser(ctx, m.userID)
+	if err != nil || user == nil {
+		h.err("GetUser", err)
 		return err
 	}
 
-	text := fmt.Sprintf("📦 План: %s\n💵 Цена: %.0f₽\n⏰ Длительность: %d дней\n\nСоздать подписку?", plan.Name, plan.Price, plan.Days)
-	keyboard := ui.GetPricingKeyboard([]*core.Plan{plan})
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, ui.GetSupportText(), ui.GetWelcomeKeyboard(user.HasTrial))
 }
 
-func (h *CallbackHandler) handleCreateSubscriptionByPlan(ctx context.Context, userID, chatID int64, messageID int, planID string) error {
-	slog.Info("Handling create subscription by plan %s for user %d", planID, userID)
+func (h *CallbackHandler) handleMyConfigs(ctx context.Context, m meta) error {
+	h.info("Handle my configs", "user_id", m.userID)
+	text := "📋 Ваши VPN конфигурации\n\nПока конфигураций нет."
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetKeysKeyboard())
+}
 
-	// Получаем план
-	plan, err := h.getPlan(ctx, planID)
+func (h *CallbackHandler) handleReferralStats(ctx context.Context, m meta) error {
+	h.info("Handle referral stats", "user_id", m.userID)
+	text := "📊 Статистика рефералов\n\nПока статистики нет."
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetReferralsKeyboard())
+}
+
+func (h *CallbackHandler) handleMyReferrals(ctx context.Context, m meta) error {
+	h.info("Handle my referrals", "user_id", m.userID)
+	text := "👥 Ваши рефералы\n\nПока рефералов нет."
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetReferralsKeyboard())
+}
+
+func (h *CallbackHandler) handleMyReferralLink(ctx context.Context, m meta) error {
+	h.info("Handle my referral link", "user_id", m.userID)
+	text := "🔗 Ваша реферальная ссылка\n\nhttps://t.me/your_bot?start=ref_123456"
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetReferralsKeyboard())
+}
+
+func (h *CallbackHandler) handleCreateWireguard(ctx context.Context, m meta) error {
+	h.info("Handle create wireguard", "user_id", m.userID)
+	text := "🔑 Создание WireGuard конфигурации\n\nВведите название для конфигурации:"
+	return h.bot.Send(ctx, m.chatID, text, nil)
+}
+
+func (h *CallbackHandler) handleCreateShadowsocks(ctx context.Context, m meta) error {
+	h.info("Handle create shadowsocks", "user_id", m.userID)
+	text := "🔑 Создание Shadowsocks конфигурации\n\nВведите название для конфигурации:"
+	return h.bot.Send(ctx, m.chatID, text, nil)
+}
+
+// ============================================================================
+// ПАРАМЕТРИЗОВАННЫЕ ОБРАБОТЧИКИ
+// ============================================================================
+
+func (h *CallbackHandler) handlePlanSelection(ctx context.Context, m meta, planID string) error {
+	h.info("Handle plan selection", "plan_id", planID, "user_id", m.userID)
+
+	plan, err := h.subUC.GetPlan(ctx, planID)
 	if err != nil {
-		h.logError(err, "GetPlan")
+		h.err("GetPlan", err)
+		return err
+	}
+
+	text := fmt.Sprintf("📦 План: %s\n💵 Цена: %.0f₽\n⏰ Длительность: %d дней\n\nВыберите способ оплаты:", plan.Name, plan.Price, plan.Days)
+	keyboard := ui.GetPaymentMethodKeyboard(planID)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, keyboard)
+}
+
+func (h *CallbackHandler) handleCreateSubscriptionByPlan(ctx context.Context, m meta, planID string) error {
+	h.info("Handle create subscription by plan", "plan_id", planID, "user_id", m.userID)
+
+	plan, err := h.subUC.GetPlan(ctx, planID)
+	if err != nil {
+		h.err("GetPlan", err)
 		return err
 	}
 
 	// Создаем подписку
-	createSubDTO := usecase.CreateSubscriptionDTO{
-		UserID: userID,
+	dto := usecase.CreateSubscriptionDTO{
+		UserID: m.userID,
 		Name:   "Основная",
 		PlanID: planID,
 		Days:   plan.Days,
 	}
 
-	_, err = h.createSubscription(ctx, createSubDTO)
+	subscription, err := h.subUC.CreateSubscription(ctx, dto)
 	if err != nil {
-		h.logError(err, "CreateSubscription")
+		h.err("CreateSubscription", err)
 		return err
 	}
 
+	// Создаем VPN для подписки
+	_, err = h.vpnUC.CreateVPNForSubscription(ctx, m.userID, subscription.ID)
+	if err != nil {
+		h.err("CreateVPN", err)
+	}
+
+	user, _ := h.userUC.GetUser(ctx, m.userID)
 	text := fmt.Sprintf("✅ Подписка '%s' создана успешно!\n⏰ Длительность: %d дней", plan.Name, plan.Days)
-	keyboard := ui.GetWelcomeKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	hasT := false
+	if user != nil {
+		hasT = user.HasTrial
+	}
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetWelcomeKeyboard(hasT))
 }
 
-func (h *CallbackHandler) handleViewSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	slog.Info("Handling view subscription %s for user %d", subscriptionID, userID)
+func (h *CallbackHandler) handleViewSubscription(ctx context.Context, m meta, subscriptionID string) error {
+	h.info("Handle view subscription", "subscription_id", subscriptionID, "user_id", m.userID)
 
-	// Получаем подписку
-	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
+	subscription, err := h.subUC.GetSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
-		h.logError(err, "GetSubscription")
+		h.err("GetSubscription", err)
 		return err
 	}
 
-	text := ui.GetSubscriptionDetailText(subscription)
-	keyboard := ui.GetSubscriptionDetailKeyboard(subscriptionID)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
-}
+	// Проверка прав доступа
+	if subscription.UserID != m.userID {
+		h.warn("Access denied to subscription", "user_id", m.userID, "owner_id", subscription.UserID)
+		return h.bot.Edit(ctx, m.chatID, m.messageID, "❌ У вас нет доступа к этой подписке", nil)
+	}
 
-func (h *CallbackHandler) handleRenameSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	slog.Info("Handling rename subscription %s for user %d", subscriptionID, userID)
-
-	// Получаем подписку
-	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
+	// Получаем план
+	plan, err := h.subUC.GetPlan(ctx, subscription.PlanID)
 	if err != nil {
-		h.logError(err, "GetSubscription")
+		h.err("GetPlan", err)
 		return err
 	}
 
-	text := ui.GetRenameSubscriptionText(subscription)
-	return h.sendMessage(ctx, chatID, text)
+	// Получаем VPN конфигурации
+	vpnConfigs, err := h.vpnUC.GetVPNConnectionsBySubscription(ctx, subscriptionID)
+	if err != nil {
+		h.err("GetVPNConnections", err)
+		vpnConfigs = []*core.VPNConnection{}
+	}
+
+	text := ui.GetSubscriptionDetailText(subscription, plan, vpnConfigs)
+	keyboard := ui.GetSubscriptionDetailKeyboard(subscription, vpnConfigs)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, keyboard)
 }
 
-func (h *CallbackHandler) handleExtendSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	slog.Info("Handling extend subscription %s for user %d", subscriptionID, userID)
+func (h *CallbackHandler) handleRenameSubscription(ctx context.Context, m meta, subscriptionID string) error {
+	h.info("Handle rename subscription", "subscription_id", subscriptionID, "user_id", m.userID)
 
-	// Получаем подписку
-	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
+	subscription, err := h.subUC.GetSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
-		h.logError(err, "GetSubscription")
+		h.err("GetSubscription", err)
 		return err
 	}
 
-	// Получаем планы для продления
-	plans, err := h.getPlans(ctx)
+	if subscription.UserID != m.userID {
+		return h.bot.Edit(ctx, m.chatID, m.messageID, "❌ У вас нет доступа к этой подписке", nil)
+	}
+
+	text := "✏️ Введите новое название для подписки:\n\n(Максимум 50 символов)"
+	keyboard := ui.GetCancelKeyboard()
+	return h.bot.Send(ctx, m.chatID, text, keyboard)
+}
+
+func (h *CallbackHandler) handleExtendSubscription(ctx context.Context, m meta, subscriptionID string) error {
+	h.info("Handle extend subscription", "subscription_id", subscriptionID, "user_id", m.userID)
+
+	subscription, err := h.subUC.GetSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
-		h.logError(err, "GetPlans")
+		h.err("GetSubscription", err)
+		return err
+	}
+
+	if subscription.UserID != m.userID {
+		return h.bot.Edit(ctx, m.chatID, m.messageID, "❌ У вас нет доступа к этой подписке", nil)
+	}
+
+	plans, err := h.subUC.GetPlans(ctx)
+	if err != nil {
+		h.err("GetPlans", err)
 		return err
 	}
 
 	text := ui.GetExtendSubscriptionText(subscription)
 	keyboard := ui.GetExtendSubscriptionKeyboard(subscriptionID, plans)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, keyboard)
 }
 
-func (h *CallbackHandler) handleDeleteSubscription(ctx context.Context, userID, chatID int64, messageID int, subscriptionID string) error {
-	slog.Info("Handling delete subscription %s for user %d", subscriptionID, userID)
+func (h *CallbackHandler) handleDeleteSubscription(ctx context.Context, m meta, subscriptionID string) error {
+	h.info("Handle delete subscription", "subscription_id", subscriptionID, "user_id", m.userID)
 
-	// Получаем подписку
-	subscription, err := h.getSubscription(ctx, userID, subscriptionID)
+	subscription, err := h.subUC.GetSubscriptionByID(ctx, subscriptionID)
 	if err != nil {
-		h.logError(err, "GetSubscription")
+		h.err("GetSubscription", err)
 		return err
 	}
 
+	if subscription.UserID != m.userID {
+		return h.bot.Edit(ctx, m.chatID, m.messageID, "❌ У вас нет доступа к этой подписке", nil)
+	}
+
+	vpnConfigs, _ := h.vpnUC.GetVPNConnectionsBySubscription(ctx, subscriptionID)
 	text := ui.GetDeleteSubscriptionText(subscription)
-	keyboard := ui.GetSubscriptionDetailKeyboard(subscriptionID)
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	keyboard := ui.GetSubscriptionDetailKeyboard(subscription, vpnConfigs)
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, keyboard)
 }
 
-func (h *CallbackHandler) handleExtendSubscriptionByPlan(ctx context.Context, userID, chatID int64, messageID int, planID, subscriptionID string) error {
-	slog.Info("Handling extend subscription %s by plan %s for user %d", subscriptionID, planID, userID)
+func (h *CallbackHandler) handleExtendSubscriptionByPlan(ctx context.Context, m meta, planID, subscriptionID string) error {
+	h.info("Handle extend subscription by plan", "subscription_id", subscriptionID, "plan_id", planID, "user_id", m.userID)
 
-	// Получаем план
-	plan, err := h.getPlan(ctx, planID)
+	plan, err := h.subUC.GetPlan(ctx, planID)
 	if err != nil {
-		h.logError(err, "GetPlan")
+		h.err("GetPlan", err)
 		return err
 	}
 
-	// Продлеваем подписку
-	err = h.extendSubscription(ctx, userID, subscriptionID, plan.Days)
+	err = h.subUC.ExtendSubscription(ctx, m.userID, subscriptionID, plan.Days)
 	if err != nil {
-		h.logError(err, "ExtendSubscription")
+		h.err("ExtendSubscription", err)
 		return err
 	}
 
+	user, _ := h.userUC.GetUser(ctx, m.userID)
 	text := fmt.Sprintf("✅ Подписка продлена на %d дней!", plan.Days)
-	keyboard := ui.GetWelcomeKeyboard()
-	return h.editMessageText(ctx, chatID, messageID, text, keyboard)
+	hasT := false
+	if user != nil {
+		hasT = user.HasTrial
+	}
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetWelcomeKeyboard(hasT))
+}
+
+func (h *CallbackHandler) handlePayCard(ctx context.Context, m meta, planID string) error {
+	h.info("Handle pay card", "plan_id", planID, "user_id", m.userID)
+
+	plan, err := h.subUC.GetPlan(ctx, planID)
+	if err != nil {
+		h.err("GetPlan", err)
+		return err
+	}
+
+	// MOCK: Картой всегда успешно
+	h.info("Creating MOCK card payment (auto-success)", "user_id", m.userID, "plan_id", planID)
+
+	dto := usecase.CreateSubscriptionDTO{
+		UserID: m.userID,
+		Name:   "Основная",
+		PlanID: planID,
+		Days:   plan.Days,
+	}
+
+	subscription, err := h.subUC.CreateSubscription(ctx, dto)
+	if err != nil {
+		h.err("CreateSubscription", err)
+		return h.bot.Send(ctx, m.chatID, "❌ Ошибка создания подписки", nil)
+	}
+
+	// Создаем VPN для подписки
+	_, err = h.vpnUC.CreateVPNForSubscription(ctx, m.userID, subscription.ID)
+	if err != nil {
+		h.err("CreateVPN", err)
+	}
+
+	text := fmt.Sprintf("✅ Оплата успешна!\n\n🎉 Подписка '%s' активирована на %d дней", plan.Name, plan.Days)
+	return h.bot.Send(ctx, m.chatID, text, ui.GetWelcomeKeyboard(false))
+}
+
+func (h *CallbackHandler) handlePaySBP(ctx context.Context, m meta, planID string) error {
+	h.info("Handle pay SBP", "plan_id", planID, "user_id", m.userID)
+	// MOCK: СБП работает аналогично карте
+	return h.handlePayCard(ctx, m, planID)
+}
+
+func (h *CallbackHandler) handlePayStars(ctx context.Context, m meta, planID string) error {
+	h.info("Handle pay stars", "plan_id", planID, "user_id", m.userID)
+
+	plan, err := h.subUC.GetPlan(ctx, planID)
+	if err != nil {
+		h.err("GetPlan", err)
+		return err
+	}
+
+	text := fmt.Sprintf("⭐ Оплата Telegram Stars\n\nПлан: %s\nЦена: %.0f₽\n\nФункция в разработке", plan.Name, plan.Price)
+	return h.bot.Send(ctx, m.chatID, text, ui.GetBackToPricingKeyboard())
+}
+
+func (h *CallbackHandler) handleViewConfig(ctx context.Context, m meta, configID string) error {
+	h.info("Handle view config", "config_id", configID, "user_id", m.userID)
+	text := "🔑 Детали VPN конфигурации\n\nФункция в разработке"
+	return h.bot.Edit(ctx, m.chatID, m.messageID, text, ui.GetKeysKeyboard())
+}
+
+func (h *CallbackHandler) handleConnectionGuide(ctx context.Context, m meta, subscriptionID string) error {
+	h.info("Handle connection guide", "subscription_id", subscriptionID, "user_id", m.userID)
+
+	subscription, err := h.subUC.GetSubscriptionByID(ctx, subscriptionID)
+	if err != nil {
+		h.err("GetSubscription", err)
+		return h.bot.Send(ctx, m.chatID, "❌ Подписка не найдена", nil)
+	}
+
+	if subscription.UserID != m.userID {
+		return h.bot.Send(ctx, m.chatID, "❌ У вас нет доступа к этой подписке", nil)
+	}
+
+	if !subscription.IsActive {
+		return h.bot.Send(ctx, m.chatID, "❌ Подписка неактивна", nil)
+	}
+
+	connectionURL := fmt.Sprintf("https://3xui.com/connect/%s", subscription.ID)
+
+	text := fmt.Sprintf(`📖 *Инструкция по подключению*
+
+*🔗 URL подключения:*
+`+"`%s`"+`
+
+*📱 Для подключения выполните следующие шаги:*
+
+1️⃣ *Скачайте VPN клиент:*
+   • WireGuard для Android/iOS/Windows/Mac
+   • Или используйте встроенный клиент
+
+2️⃣ *Импортируйте конфигурацию:*
+   • Откройте приложение WireGuard
+   • Нажмите "Добавить туннель"
+   • Выберите "Импортировать из файла или архива"
+
+3️⃣ *Подключитесь:*
+   • Найдите вашу конфигурацию в списке
+   • Нажмите переключатель для подключения
+   • Готово! Ваш трафик защищен
+
+*💡 Полезные советы:*
+   • Держите приложение обновленным
+   • При проблемах попробуйте переподключиться
+   • Следите за сроком действия подписки
+
+*🆘 Нужна помощь?*
+   Обратитесь в поддержку через кнопку ниже`, connectionURL)
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🆘 Поддержка", "open_support"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⬅️ Назад к подписке", fmt.Sprintf("view_subscription_%s", subscriptionID)),
+		),
+	)
+
+	return h.bot.Send(ctx, m.chatID, text, keyboard)
 }
 
 // ============================================================================
 // ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
 // ============================================================================
 
-func (h *CallbackHandler) getUserID(update tgbotapi.Update) int64 {
-	if update.Message != nil {
-		return update.Message.From.ID
+func (h *CallbackHandler) info(msg string, args ...any) {
+	if h.log != nil {
+		h.log.Info(msg, args...)
+	} else {
+		slog.Info(msg, args...)
 	}
-	if update.CallbackQuery != nil {
-		return update.CallbackQuery.From.ID
-	}
-	return 0
 }
 
-func (h *CallbackHandler) getChatID(update tgbotapi.Update) int64 {
-	if update.Message != nil {
-		return update.Message.Chat.ID
+func (h *CallbackHandler) warn(msg string, args ...any) {
+	if h.log != nil {
+		h.log.Warn(msg, args...)
+	} else {
+		slog.Warn(msg, args...)
 	}
-	if update.CallbackQuery != nil {
-		return update.CallbackQuery.Message.Chat.ID
-	}
-	return 0
 }
 
-func (h *CallbackHandler) getMessageID(update tgbotapi.Update) int {
-	if update.Message != nil {
-		return update.Message.MessageID
+func (h *CallbackHandler) err(msg string, e error, args ...any) {
+	if e == nil {
+		return
 	}
-	if update.CallbackQuery != nil {
-		return update.CallbackQuery.Message.MessageID
-	}
-	return 0
-}
-
-func (h *CallbackHandler) sendMessage(ctx context.Context, chatID int64, text string) error {
-	if bot, ok := h.controller.(interface {
-		SendMessage(ctx context.Context, chatID int64, text string) error
-	}); ok {
-		return bot.SendMessage(ctx, chatID, text)
-	}
-	return nil
-}
-
-func (h *CallbackHandler) editMessageText(ctx context.Context, chatID int64, messageID int, text string, replyMarkup interface{}) error {
-	if bot, ok := h.controller.(interface {
-		EditMessageText(ctx context.Context, chatID int64, messageID int, text string, replyMarkup interface{}) error
-	}); ok {
-		return bot.EditMessageText(ctx, chatID, messageID, text, replyMarkup)
-	}
-	return nil
-}
-
-func (h *CallbackHandler) answerCallbackQuery(ctx context.Context, callbackQueryID, text string, showAlert bool) error {
-	if bot, ok := h.controller.(interface {
-		AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string, showAlert bool) error
-	}); ok {
-		return bot.AnswerCallbackQuery(ctx, callbackQueryID, text, showAlert)
-	}
-	return nil
-}
-
-// ============================================================================
-// USE CASE МЕТОДЫ
-// ============================================================================
-
-func (h *CallbackHandler) activateTrial(ctx context.Context, userID int64) (bool, error) {
-	if userUC, ok := h.controller.(interface {
-		UserUC() *usecase.UserUseCase
-	}); ok {
-		return userUC.UserUC().ActivateTrial(ctx, userID)
-	}
-	return false, nil
-}
-
-func (h *CallbackHandler) getUser(ctx context.Context, userID int64) (interface{}, error) {
-	if userUC, ok := h.controller.(interface {
-		UserUC() *usecase.UserUseCase
-	}); ok {
-		return userUC.UserUC().GetUser(ctx, userID)
-	}
-	return nil, nil
-}
-
-func (h *CallbackHandler) getUserSubscriptions(ctx context.Context, userID int64) ([]*core.Subscription, error) {
-	if subUC, ok := h.controller.(interface {
-		SubUC() *usecase.SubscriptionUseCase
-	}); ok {
-		return subUC.SubUC().GetUserSubscriptions(ctx, userID)
-	}
-	return nil, nil
-}
-
-func (h *CallbackHandler) getPlans(ctx context.Context) ([]*core.Plan, error) {
-	if subUC, ok := h.controller.(interface {
-		SubUC() *usecase.SubscriptionUseCase
-	}); ok {
-		return subUC.SubUC().GetPlans(ctx)
-	}
-	return nil, nil
-}
-
-func (h *CallbackHandler) getPlan(ctx context.Context, planID string) (*core.Plan, error) {
-	if subUC, ok := h.controller.(interface {
-		SubUC() *usecase.SubscriptionUseCase
-	}); ok {
-		return subUC.SubUC().GetPlan(ctx, planID)
-	}
-	return nil, nil
-}
-
-func (h *CallbackHandler) createSubscription(ctx context.Context, dto usecase.CreateSubscriptionDTO) (interface{}, error) {
-	if subUC, ok := h.controller.(interface {
-		SubUC() *usecase.SubscriptionUseCase
-	}); ok {
-		return subUC.SubUC().CreateSubscription(ctx, dto)
-	}
-	return nil, nil
-}
-
-func (h *CallbackHandler) getSubscription(ctx context.Context, userID int64, subscriptionID string) (*core.Subscription, error) {
-	if subUC, ok := h.controller.(interface {
-		SubUC() *usecase.SubscriptionUseCase
-	}); ok {
-		return subUC.SubUC().GetSubscription(ctx, userID, subscriptionID)
-	}
-	return nil, nil
-}
-
-func (h *CallbackHandler) extendSubscription(ctx context.Context, userID int64, subscriptionID string, days int) error {
-	if subUC, ok := h.controller.(interface {
-		SubUC() *usecase.SubscriptionUseCase
-	}); ok {
-		return subUC.SubUC().ExtendSubscription(ctx, userID, subscriptionID, days)
-	}
-	return nil
-}
-
-func (h *CallbackHandler) logError(err error, context string) {
-	if logger, ok := h.controller.(interface {
-		LogError(err error, context string)
-	}); ok {
-		logger.LogError(err, context)
+	allArgs := append([]any{"error", e}, args...)
+	if h.log != nil {
+		h.log.Error(msg, allArgs...)
+	} else {
+		slog.Error(msg, allArgs...)
 	}
 }

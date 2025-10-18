@@ -62,6 +62,7 @@ type ReferralLinkRepo interface {
 type VPNRepo interface {
 	CreateVPNConnection(ctx context.Context, conn *core.VPNConnection) error
 	GetVPNConnectionsByTelegramUserID(ctx context.Context, telegramUserID int64) ([]*core.VPNConnection, error)
+	GetVPNConnectionsBySubscriptionID(ctx context.Context, subscriptionID string) ([]*core.VPNConnection, error)
 	GetVPNConnectionByID(ctx context.Context, id string) (*core.VPNConnection, error)
 	GetVPNConnectionByMarzbanUsername(ctx context.Context, marzbanUsername string) (*core.VPNConnection, error)
 	UpdateVPNConnectionName(ctx context.Context, id, name string) error

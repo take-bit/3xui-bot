@@ -56,7 +56,7 @@ type Container struct {
 // NewContainer создает и инициализирует контейнер зависимостей
 func NewContainer(ctx context.Context, configPath string) (*Container, error) {
 	c := &Container{}
-	
+
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
@@ -131,7 +131,7 @@ func NewContainer(ctx context.Context, configPath string) (*Container, error) {
 	c.VPNUC = usecase.NewVPNUseCase(vpnRepo, c.Marzban, subRepo, planRepo)
 
 	// 11. Notification UseCase (с bot API)
-	c.NotifUC = usecase.NewNotificationUseCase(notifRepo, userRepo, bot)
+	c.NotifUC = usecase.NewNotificationUseCase(notifRepo, userRepo, c.Notifier)
 
 	// 12. Mock Payment Provider (TODO: заменить на реальный)
 	paymentProvider := payment.NewMockProvider()
@@ -148,6 +148,7 @@ func NewContainer(ctx context.Context, configPath string) (*Container, error) {
 	// 14. Создаем роутер
 	c.Router = telegram.NewRouter(
 		bot,
+		c.Notifier,
 		c.UserUC,
 		c.SubUC,
 		c.PaymentUC,

@@ -35,7 +35,13 @@ func (s *Subscription) GetDisplayName() string {
 	if s.Name != "" {
 		return s.Name
 	}
-	return "Подписка " + s.ID[:8]
+	if len(s.ID) >= 8 {
+		return "Подписка " + s.ID[:8]
+	}
+	if s.ID != "" {
+		return "Подписка " + s.ID
+	}
+	return "Подписка"
 }
 
 // GetStatusText возвращает текстовое описание статуса подписки

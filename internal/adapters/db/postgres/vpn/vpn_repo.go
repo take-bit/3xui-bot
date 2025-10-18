@@ -68,6 +68,21 @@ func (v *VPNConnection) GetVPNConnectionsByTelegramUserID(ctx context.Context, t
 	return connections, nil
 }
 
+// GetVPNConnectionsBySubscriptionID получает все VPN подключения для подписки
+// Пока реализовано через получение подписки и VPN по user_id
+func (v *VPNConnection) GetVPNConnectionsBySubscriptionID(ctx context.Context, subscriptionID string) ([]*core.VPNConnection, error) {
+	// Получаем user_id из подписки
+	var telegramUserID int64
+	query := `SELECT user_id FROM subscriptions WHERE id = $1`
+	err := v.dbGetter(ctx).QueryRow(ctx, query, subscriptionID).Scan(&telegramUserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user_id from subscription: %w", err)
+	}
+
+	// Получаем VPN подключения этого пользователя
+	return v.GetVPNConnectionsByTelegramUserID(ctx, telegramUserID)
+}
+
 // GetVPNConnectionByID получает VPN подключение по ID
 func (v *VPNConnection) GetVPNConnectionByID(ctx context.Context, id string) (*core.VPNConnection, error) {
 	query := `

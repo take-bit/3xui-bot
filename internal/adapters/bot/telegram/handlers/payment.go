@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 
 	"3xui-bot/internal/usecase"
 
@@ -29,7 +29,7 @@ func NewPaymentHandler(
 
 // HandleSelectPlan обрабатывает выбор плана подписки
 func (h *PaymentHandler) HandleSelectPlan(ctx context.Context, userID int64, chatID int64, planID string) error {
-	slog.Info("User %d selected plan %s", userID, planID)
+	slog.Info("User selected plan", "user_id", userID, "plan_id", planID)
 
 	// Создаем платеж через UseCase
 	payment, paymentURL, err := h.paymentUC.CreatePaymentForPlan(ctx, userID, planID)
@@ -137,7 +137,7 @@ func (h *PaymentHandler) HandlePaymentWebhook(ctx context.Context, paymentID str
 	case "cancelled", "canceled":
 		return h.paymentUC.ProcessPaymentCancellation(ctx, paymentID)
 	default:
-		slog.Info("Unknown payment status: %s", status)
+		slog.Info("Unknown payment status", "status", status)
 		return nil
 	}
 }

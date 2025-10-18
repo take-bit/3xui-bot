@@ -1,15 +1,21 @@
-.PHONY: help build run migrate migrate-down clean docker-up docker-down test
+.PHONY: help build run dev migrate migrate-down migrate-fresh clean docker-up docker-down test setup
 
 help:
 	@echo "Available commands:"
-	@echo "  make build        - Build the bot binary"
-	@echo "  make run          - Run the bot"
-	@echo "  make migrate      - Apply database migrations"
-	@echo "  make migrate-down - Rollback last migration"
-	@echo "  make docker-up    - Start PostgreSQL in Docker"
-	@echo "  make docker-down  - Stop PostgreSQL"
-	@echo "  make clean        - Clean build artifacts"
-	@echo "  make test         - Run tests"
+	@echo "  make setup         - Full setup (docker + migrate)"
+	@echo "  make build         - Build the bot binary"
+	@echo "  make run           - Run the bot"
+	@echo "  make dev           - Run bot in development mode"
+	@echo "  make migrate       - Apply database migrations (drop + create)"
+	@echo "  make migrate-down  - Drop all tables"
+	@echo "  make migrate-fresh - Fresh migration (down + up)"
+	@echo "  make docker-up     - Start PostgreSQL in Docker"
+	@echo "  make docker-down   - Stop PostgreSQL"
+	@echo "  make clean         - Clean build artifacts"
+	@echo "  make test          - Run tests"
+
+setup: docker-up migrate
+	@echo "✅ Setup complete! You can now run: make run"
 
 build:
 	@echo "Building bot..."
@@ -20,19 +26,30 @@ run: build
 	@echo "Starting bot..."
 	./bot
 
+dev:
+	@echo "Running bot in development mode..."
+	go run cmd/bot/main.go
+
 migrate:
-	@echo "Applying migrations..."
+	@echo "🔄 Dropping all tables..."
+	@docker exec -i 3xui_bot_db psql -U bot_user -d 3xui_bot < migrations/000_drop_all.sql 2>/dev/null || \
+	psql -h localhost -U bot_user -d 3xui_bot -f migrations/000_drop_all.sql 2>/dev/null || true
+	@echo "📋 Applying schema..."
 	@docker exec -i 3xui_bot_db psql -U bot_user -d 3xui_bot < migrations/001_complete_schema.sql || \
 	psql -h localhost -U bot_user -d 3xui_bot -f migrations/001_complete_schema.sql
+	@echo "🌱 Seeding plans..."
 	@docker exec -i 3xui_bot_db psql -U bot_user -d 3xui_bot < migrations/002_seed_plans.sql || \
 	psql -h localhost -U bot_user -d 3xui_bot -f migrations/002_seed_plans.sql
-	@echo "✅ Migrations applied"
+	@echo "✅ Migrations applied successfully"
 
 migrate-down:
-	@echo "Rolling back migrations..."
-	@docker exec -i 3xui_bot_db psql -U bot_user -d 3xui_bot -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" || \
-	psql -h localhost -U bot_user -d 3xui_bot -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
-	@echo "✅ Database reset"
+	@echo "🔄 Rolling back migrations (dropping all tables)..."
+	@docker exec -i 3xui_bot_db psql -U bot_user -d 3xui_bot < migrations/000_drop_all.sql || \
+	psql -h localhost -U bot_user -d 3xui_bot -f migrations/000_drop_all.sql
+	@echo "✅ All tables dropped"
+
+migrate-fresh: migrate-down migrate
+	@echo "✅ Fresh migration complete!"
 
 docker-up:
 	@echo "Starting PostgreSQL..."

@@ -24,48 +24,33 @@ func NewUser(dbGetter transactorPgx.DBGetter) *User {
 func (u *User) CreateUser(ctx context.Context, user *core.User) error {
 	query := `
 		INSERT INTO users (telegram_id, username, first_name, last_name, language_code, is_blocked, has_trial, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id`
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
-	err := u.dbGetter(ctx).QueryRow(ctx, query,
+	_, err := u.dbGetter(ctx).Exec(ctx, query,
 		user.TelegramID, user.Username, user.FirstName, user.LastName,
 		user.LanguageCode, user.IsBlocked, user.HasTrial, user.CreatedAt, user.UpdatedAt,
-	).Scan(&user.ID)
+	)
 
 	if err != nil {
-		return fmt.Errorf("failed to create user: %w", err)
+		return fmt.Errorf("failed to create user (telegram_id=%d): %w", user.TelegramID, err)
 	}
 
 	return nil
 }
 
 func (u *User) GetUserByID(ctx context.Context, id int64) (*core.User, error) {
-	query := `
-		SELECT id, telegram_id, username, first_name, last_name, language_code, is_blocked, has_trial, created_at, updated_at
-		FROM users WHERE id = $1`
-
-	user := &core.User{}
-	err := u.dbGetter(ctx).QueryRow(ctx, query, id).Scan(
-		&user.ID, &user.TelegramID, &user.Username, &user.FirstName,
-		&user.LastName, &user.LanguageCode, &user.IsBlocked, &user.HasTrial,
-		&user.CreatedAt, &user.UpdatedAt,
-	)
-
-	if err != nil {
-		return nil, usecase.ErrNotFound
-	}
-
-	return user, nil
+	// id теперь это telegram_id
+	return u.GetUserByTelegramID(ctx, id)
 }
 
 func (u *User) GetUserByTelegramID(ctx context.Context, telegramID int64) (*core.User, error) {
 	query := `
-		SELECT id, telegram_id, username, first_name, last_name, language_code, is_blocked, has_trial, created_at, updated_at
+		SELECT telegram_id, username, first_name, last_name, language_code, is_blocked, has_trial, created_at, updated_at
 		FROM users WHERE telegram_id = $1`
 
 	user := &core.User{}
 	err := u.dbGetter(ctx).QueryRow(ctx, query, telegramID).Scan(
-		&user.ID, &user.TelegramID, &user.Username, &user.FirstName,
+		&user.TelegramID, &user.Username, &user.FirstName,
 		&user.LastName, &user.LanguageCode, &user.IsBlocked, &user.HasTrial,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
@@ -82,10 +67,10 @@ func (u *User) UpdateUser(ctx context.Context, user *core.User) error {
 		UPDATE users 
 		SET username = $2, first_name = $3, last_name = $4, language_code = $5, 
 		    is_blocked = $6, has_trial = $7, updated_at = $8
-		WHERE id = $1`
+		WHERE telegram_id = $1`
 
 	result, err := u.dbGetter(ctx).Exec(ctx, query,
-		user.ID, user.Username, user.FirstName, user.LastName,
+		user.TelegramID, user.Username, user.FirstName, user.LastName,
 		user.LanguageCode, user.IsBlocked, user.HasTrial, user.UpdatedAt,
 	)
 
@@ -100,10 +85,10 @@ func (u *User) UpdateUser(ctx context.Context, user *core.User) error {
 	return nil
 }
 
-func (u *User) DeleteUser(ctx context.Context, id int64) error {
-	query := `DELETE FROM users WHERE id = $1`
+func (u *User) DeleteUser(ctx context.Context, telegramID int64) error {
+	query := `DELETE FROM users WHERE telegram_id = $1`
 
-	_, err := u.dbGetter(ctx).Exec(ctx, query, id)
+	_, err := u.dbGetter(ctx).Exec(ctx, query, telegramID)
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}

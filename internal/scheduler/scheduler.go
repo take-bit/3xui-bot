@@ -55,7 +55,7 @@ func (s *Scheduler) runPeriodically(ctx context.Context, interval time.Duration,
 
 	// Запускаем сразу при старте
 	if err := fn(ctx); err != nil {
-		slog.Info("Error in scheduled job: %v", err)
+		slog.Error("Error in scheduled job", "error", err)
 	}
 
 	for {
@@ -65,7 +65,7 @@ func (s *Scheduler) runPeriodically(ctx context.Context, interval time.Duration,
 			return
 		case <-ticker.C:
 			if err := fn(ctx); err != nil {
-				slog.Info("Error in scheduled job: %v", err)
+				slog.Error("Error in scheduled job", "error", err)
 			}
 		}
 	}

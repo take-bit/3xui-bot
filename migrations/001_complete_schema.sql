@@ -1,6 +1,5 @@
 CREATE TABLE IF NOT EXISTS users (
-    id BIGSERIAL PRIMARY KEY,
-    telegram_id BIGINT UNIQUE NOT NULL,
+    telegram_id BIGINT PRIMARY KEY,
     username VARCHAR(255),
     first_name VARCHAR(255),
     last_name VARCHAR(255),
@@ -24,7 +23,7 @@ CREATE TABLE IF NOT EXISTS plans (
 
 CREATE TABLE IF NOT EXISTS subscriptions (
     id VARCHAR(50) PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     plan_id VARCHAR(50) NOT NULL REFERENCES plans(id),
     start_date TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -36,7 +35,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 
 CREATE TABLE IF NOT EXISTS payments (
     id VARCHAR(50) PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
     amount DECIMAL(10,2) NOT NULL,
     currency VARCHAR(3) DEFAULT 'RUB',
     payment_method VARCHAR(255),
@@ -53,7 +52,7 @@ CREATE TABLE IF NOT EXISTS payments (
 -- Таблица VPN подключений (связь с Marzban)
 CREATE TABLE IF NOT EXISTS vpn_connections (
     id VARCHAR(50) PRIMARY KEY,
-    telegram_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    telegram_user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
     marzban_username VARCHAR(100) NOT NULL UNIQUE, -- Username в Marzban
     name VARCHAR(255), -- Локальное имя подключения
     is_active BOOLEAN DEFAULT TRUE, -- Флаг активности в нашей системе
@@ -68,8 +67,8 @@ CREATE TABLE IF NOT EXISTS vpn_connections (
 -- Таблица реферальных связей
 CREATE TABLE IF NOT EXISTS referrals (
     id BIGSERIAL PRIMARY KEY,
-    referrer_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    referee_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    referrer_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
+    referee_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(referrer_id, referee_id)
 );
@@ -77,7 +76,7 @@ CREATE TABLE IF NOT EXISTS referrals (
 -- Таблица реферальных ссылок
 CREATE TABLE IF NOT EXISTS referral_links (
     id BIGSERIAL PRIMARY KEY,
-    user_id BIGINT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id BIGINT UNIQUE NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
     link VARCHAR(255) UNIQUE NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -91,7 +90,7 @@ CREATE TABLE IF NOT EXISTS referral_links (
 -- Таблица уведомлений
 CREATE TABLE IF NOT EXISTS notifications (
     id VARCHAR(50) PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(telegram_id) ON DELETE CASCADE,
     type VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
@@ -104,7 +103,7 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- =============================================================================
 
 -- Индексы для пользователей
-CREATE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id);
+-- Индекс на telegram_id не нужен - это уже PRIMARY KEY
 
 -- Индексы для подписок
 CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);

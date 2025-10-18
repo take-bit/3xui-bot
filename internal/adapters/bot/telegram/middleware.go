@@ -1,66 +1,28 @@
 package telegram
 
 import (
-	"log/slog"
 	"context"
-	"time"
+
+	"3xui-bot/internal/ports"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// Middleware функция middleware
-type Middleware func(next Handler) Handler
+// HandlerFunc тип функции-обработчика
+type HandlerFunc func(ctx context.Context, upd tgbotapi.Update) error
 
-// Handler обработчик обновлений
-type Handler func(ctx context.Context, update tgbotapi.Update) error
+// Middleware тип middleware функции
+type Middleware func(next HandlerFunc) HandlerFunc
 
-// LoggingMiddleware логирует все обновления
-func LoggingMiddleware(next Handler) Handler {
-	return func(ctx context.Context, update tgbotapi.Update) error {
-		start := time.Now()
-
-		var userID int64
-		if update.Message != nil && update.Message.From != nil {
-			userID = update.Message.From.ID
-		} else if update.CallbackQuery != nil && update.CallbackQuery.From != nil {
-			userID = update.CallbackQuery.From.ID
-		}
-
-		slog.Info("[Middleware] Processing update from user %d", userID)
-
-		err := next(ctx, update)
-
-		duration := time.Since(start)
-		if err != nil {
-			slog.Info("[Middleware] Error processing update: %v (took %v)", err, duration)
-		} else {
-			slog.Info("[Middleware] Successfully processed update (took %v)", duration)
-		}
-
-		return err
-	}
-}
-
-// RecoveryMiddleware восстанавливается после паники
-func RecoveryMiddleware(next Handler) Handler {
-	return func(ctx context.Context, update tgbotapi.Update) (err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Info("[Recovery] Panic recovered: %v", r)
-				err = nil // Не роняем бота
+// EarlyAckMiddleware отправляет ранний ACK на callback query до основной обработки
+func EarlyAckMiddleware(bot ports.BotPort) Middleware {
+	return func(next HandlerFunc) HandlerFunc {
+		return func(ctx context.Context, upd tgbotapi.Update) error {
+			// Если это callback query, отправляем ACK сразу
+			if cb := upd.CallbackQuery; cb != nil {
+				_ = bot.AnswerCallback(ctx, cb.ID, "", false)
 			}
-		}()
-
-		return next(ctx, update)
-	}
-}
-
-// Chain объединяет middleware
-func Chain(middlewares ...Middleware) Middleware {
-	return func(next Handler) Handler {
-		for i := len(middlewares) - 1; i >= 0; i-- {
-			next = middlewares[i](next)
+			return next(ctx, upd)
 		}
-		return next
 	}
 }

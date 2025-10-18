@@ -6,8 +6,7 @@ import (
 
 // User представляет пользователя системы
 type User struct {
-	ID           int64     `json:"id" db:"id"`
-	TelegramID   int64     `json:"telegram_id" db:"telegram_id"`
+	TelegramID   int64     `json:"telegram_id" db:"telegram_id"` // PRIMARY KEY
 	Username     string    `json:"username" db:"username"`
 	FirstName    string    `json:"first_name" db:"first_name"`
 	LastName     string    `json:"last_name" db:"last_name"`

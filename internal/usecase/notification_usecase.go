@@ -17,19 +17,19 @@ import (
 type NotificationUseCase struct {
 	notifRepo ports.NotificationRepo
 	userRepo  ports.UserRepo
-	bot       *tgbotapi.BotAPI
+	notifier  ports.Notifier
 }
 
 // NewNotificationUseCase создает новый use case для уведомлений
 func NewNotificationUseCase(
 	notifRepo ports.NotificationRepo,
 	userRepo ports.UserRepo,
-	bot *tgbotapi.BotAPI,
+	notifier ports.Notifier,
 ) *NotificationUseCase {
 	return &NotificationUseCase{
 		notifRepo: notifRepo,
 		userRepo:  userRepo,
-		bot:       bot,
+		notifier:  notifier,
 	}
 }
 
@@ -91,11 +91,8 @@ func (uc *NotificationUseCase) sendToTelegram(ctx context.Context, notification 
 	// Формируем сообщение
 	message := fmt.Sprintf("📢 *%s*\n\n%s", notification.Title, notification.Message)
 
-	// Отправляем сообщение
-	msg := tgbotapi.NewMessage(user.TelegramID, message)
-	msg.ParseMode = "Markdown"
-
-	if _, err := uc.bot.Send(msg); err != nil {
+	// Отправляем сообщение через notifier
+	if err := uc.notifier.SendWithParseMode(ctx, user.TelegramID, message, "Markdown", nil); err != nil {
 		slog.Error("Failed to send notification to user", "user_id", user.TelegramID, "error", err)
 		return fmt.Errorf("failed to send message: %w", err)
 	}
@@ -181,4 +178,61 @@ func (uc *NotificationUseCase) DeleteNotification(ctx context.Context, userID in
 	}
 
 	return uc.notifRepo.DeleteNotification(ctx, notificationID)
+}
+
+// SendNotificationWithPhoto отправляет уведомление с фото
+func (uc *NotificationUseCase) SendNotificationWithPhoto(ctx context.Context, userID int64, photoPath, caption string, keyboard interface{}) error {
+	// Получаем пользователя для проверки chat_id
+	user, err := uc.userRepo.GetUserByTelegramID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Отправляем фото через notifier
+	if err := uc.notifier.SendPhotoFromFile(ctx, user.TelegramID, photoPath, caption, keyboard); err != nil {
+		return fmt.Errorf("failed to send photo notification: %w", err)
+	}
+
+	// Сохраняем уведомление в БД
+	notification := &core.Notification{
+		ID:        id.Generate(),
+		UserID:    userID,
+		Type:      "photo_notification",
+		Title:     "Уведомление с фото",
+		Message:   caption,
+		IsRead:    false,
+		CreatedAt: time.Now(),
+	}
+
+	if err := uc.notifRepo.CreateNotification(ctx, notification); err != nil {
+		slog.Warn("Failed to save photo notification to DB", "error", err)
+		// Не возвращаем ошибку, так как уведомление уже отправлено
+	}
+
+	return nil
+}
+
+// SendReferralRankingPhoto отправляет фото реферального рейтинга
+func (uc *NotificationUseCase) SendReferralRankingPhoto(ctx context.Context, userID int64) error {
+	caption := `🏆 Рейтинг рефералов
+
+Здесь можно увидеть топ людей, которые пригласили наибольшее количество рефералов в сервис.
+
+Твоё место в рейтинге:
+Ты еще не приглашал пользователей в проект.
+
+🏆 Топ-5 пригласивших:
+1. 57956***** - 156 чел.
+2. 80000***** - 105 чел.
+3. 52587***** - 12 чел.
+4. 63999***** - 7 чел.
+5. 10149***** - 6 чел.`
+
+	keyboard := tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("⬅️ Назад", "open_referrals"),
+		),
+	)
+
+	return uc.SendNotificationWithPhoto(ctx, userID, "static/images/bot_banner.png", caption, keyboard)
 }

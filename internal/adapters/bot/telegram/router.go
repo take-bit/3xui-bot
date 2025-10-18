@@ -1,10 +1,15 @@
 package telegram
 
 import (
-	"log/slog"
 	"context"
+	"fmt"
+	"log/slog"
+	"strings"
+	"time"
 
 	"3xui-bot/internal/adapters/bot/telegram/handlers"
+	"3xui-bot/internal/adapters/bot/telegram/ui"
+	"3xui-bot/internal/ports"
 	"3xui-bot/internal/usecase"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -12,7 +17,8 @@ import (
 
 // Router маршрутизатор для Telegram бота
 type Router struct {
-	bot *tgbotapi.BotAPI
+	bot      *tgbotapi.BotAPI
+	notifier ports.Notifier
 
 	// Use cases
 	userUC     *usecase.UserUseCase
@@ -32,6 +38,7 @@ type Router struct {
 // NewRouter создает новый роутер
 func NewRouter(
 	bot *tgbotapi.BotAPI,
+	notifier ports.Notifier,
 	userUC *usecase.UserUseCase,
 	subUC *usecase.SubscriptionUseCase,
 	paymentUC *usecase.PaymentUseCase,
@@ -41,6 +48,7 @@ func NewRouter(
 ) *Router {
 	r := &Router{
 		bot:        bot,
+		notifier:   notifier,
 		userUC:     userUC,
 		subUC:      subUC,
 		paymentUC:  paymentUC,
@@ -50,6 +58,14 @@ func NewRouter(
 	}
 
 	// Инициализируем handlers
+	r.startHandler = handlers.NewStartHandler(bot, notifier, userUC, subUC)
+
+	// notifier должен реализовывать ports.BotPort (TelegramNotifier реализует оба интерфейса)
+	botPort, ok := notifier.(ports.BotPort)
+	if !ok {
+		panic("notifier must implement ports.BotPort")
+	}
+	r.callbackHandler = handlers.NewCallbackHandler(userUC, subUC, vpnUC, botPort, slog.Default())
 	r.paymentHandler = handlers.NewPaymentHandler(bot, paymentUC)
 	r.vpnHandler = handlers.NewVPNHandler(bot, vpnUC)
 
@@ -68,6 +84,21 @@ func (r *Router) HandleUpdate(ctx context.Context, update tgbotapi.Update) error
 		return r.handleCallback(ctx, update.CallbackQuery)
 	}
 
+	// Обработка pre-checkout query (для Stars)
+	if update.PreCheckoutQuery != nil {
+		return r.handlePreCheckout(ctx, update.PreCheckoutQuery)
+	}
+
+	// Обработка успешного платежа (для Stars)
+	if update.Message != nil && update.Message.SuccessfulPayment != nil {
+		return r.handleSuccessfulPayment(ctx, update.Message)
+	}
+
+	// Обработка обычных сообщений (не команд)
+	if update.Message != nil && update.Message.Text != "" {
+		return r.handleUnknownMessage(ctx, update.Message)
+	}
+
 	return nil
 }
 
@@ -81,26 +112,27 @@ func (r *Router) handleCommand(ctx context.Context, message *tgbotapi.Message) e
 	case "vpn":
 		return r.vpnHandler.HandleShowVPNs(ctx, message.From.ID, message.Chat.ID)
 	default:
-		return nil
+		return r.handleUnknownCommand(ctx, message)
 	}
 }
 
 // handleCallback обрабатывает callback queries
 func (r *Router) handleCallback(ctx context.Context, callback *tgbotapi.CallbackQuery) error {
-	// Здесь должна быть логика маршрутизации callback
-	// TODO: Реализовать полную маршрутизацию
-	slog.Info("Callback: %s from user %d", callback.Data, callback.From.ID)
-	return nil
+	// Ранний ACK (отправляем сразу, чтобы убрать "часики" в Telegram)
+	if botPort, ok := r.notifier.(ports.BotPort); ok {
+		_ = botPort.AnswerCallback(ctx, callback.ID, "", false)
+	}
+
+	// Создаем Update из callback
+	update := tgbotapi.Update{
+		CallbackQuery: callback,
+	}
+	return r.callbackHandler.Handle(ctx, update)
 }
 
 // handleStart обрабатывает команду /start
 func (r *Router) handleStart(ctx context.Context, message *tgbotapi.Message) error {
-	// Создаем или получаем пользователя
-	// TODO: Реализовать через handlers.StartHandler
-
-	msg := tgbotapi.NewMessage(message.Chat.ID, "Добро пожаловать в VPN бот!")
-	_, err := r.bot.Send(msg)
-	return err
+	return r.startHandler.Handle(ctx, message)
 }
 
 // handleHelp обрабатывает команду /help
@@ -114,4 +146,172 @@ func (r *Router) handleHelp(ctx context.Context, message *tgbotapi.Message) erro
 	msg.ParseMode = "Markdown"
 	_, err := r.bot.Send(msg)
 	return err
+}
+
+// handlePreCheckout обрабатывает pre-checkout query для Stars
+func (r *Router) handlePreCheckout(ctx context.Context, query *tgbotapi.PreCheckoutQuery) error {
+	slog.Info("Pre-checkout query received",
+		"query_id", query.ID,
+		"user_id", query.From.ID,
+		"currency", query.Currency,
+		"total_amount", query.TotalAmount,
+		"payload", query.InvoicePayload)
+
+	// Всегда подтверждаем платеж
+	config := tgbotapi.PreCheckoutConfig{
+		PreCheckoutQueryID: query.ID,
+		OK:                 true,
+	}
+
+	_, err := r.bot.Request(config)
+	if err != nil {
+		slog.Error("Failed to answer pre-checkout query", "error", err)
+	}
+	return err
+}
+
+// handleSuccessfulPayment обрабатывает успешный платеж Stars
+func (r *Router) handleSuccessfulPayment(ctx context.Context, message *tgbotapi.Message) error {
+	payment := message.SuccessfulPayment
+	userID := message.From.ID
+	chatID := message.Chat.ID
+
+	slog.Info("Successful payment received",
+		"user_id", userID,
+		"currency", payment.Currency,
+		"total_amount", payment.TotalAmount,
+		"payload", payment.InvoicePayload,
+		"telegram_payment_charge_id", payment.TelegramPaymentChargeID)
+
+	// Парсим payload чтобы получить plan_id
+	// Формат: plan_{planID}_user_{userID}
+	var planID string
+	if _, err := fmt.Sscanf(payment.InvoicePayload, "plan_%s", &planID); err == nil {
+		// Убираем суффикс "_user_..."
+		if idx := strings.Index(planID, "_user_"); idx > 0 {
+			planID = planID[:idx]
+		}
+	} else {
+		slog.Error("Failed to parse payload", "payload", payment.InvoicePayload)
+		r.notifier.Send(ctx, chatID, "❌ Ошибка обработки платежа. Обратитесь в поддержку.", nil)
+		return err
+	}
+
+	// Получаем план
+	plan, err := r.subUC.GetPlanByID(ctx, planID)
+	if err != nil {
+		slog.Error("Failed to get plan", "plan_id", planID, "error", err)
+		r.notifier.Send(ctx, chatID, "❌ План не найден. Обратитесь в поддержку.", nil)
+		return err
+	}
+
+	slog.Info("Creating subscription after successful Stars payment",
+		"user_id", userID,
+		"plan_id", planID,
+		"charge_id", payment.TelegramPaymentChargeID)
+
+	// Создаем подписку
+	subscription, err := r.subUC.CreateSubscription(ctx, usecase.CreateSubscriptionDTO{
+		UserID:    userID,
+		PlanID:    plan.ID,
+		Name:      fmt.Sprintf("%s (Stars)", plan.Name),
+		StartDate: time.Now(),
+		EndDate:   time.Now().AddDate(0, 0, plan.Days),
+		IsActive:  true,
+	})
+	if err != nil {
+		slog.Error("Failed to create subscription after Stars payment",
+			"error", err,
+			"user_id", userID,
+			"plan_id", planID)
+		r.notifier.Send(ctx, chatID, "❌ Не удалось создать подписку. Деньги будут возвращены. Обратитесь в поддержку.", nil)
+		return err
+	}
+
+	slog.Info("Subscription created successfully",
+		"subscription_id", subscription.ID,
+		"user_id", userID,
+		"plan_id", planID,
+		"end_date", subscription.EndDate.Format("2006-01-02 15:04:05"))
+
+	// Создаем VPN конфигурацию
+	vpnConnection, err := r.vpnUC.CreateVPNForSubscription(ctx, userID, subscription.ID)
+	if err != nil {
+		slog.Error("Failed to create VPN", "error", err)
+		text := fmt.Sprintf(`💎 Оплата Stars - Успешно! ✅
+
+📦 План: %s
+💎 Оплачено: %d Stars
+
+⚠️ Подписка создана, но не удалось создать VPN конфигурацию.
+Обратитесь в поддержку.`, plan.Name, payment.TotalAmount)
+
+		r.notifier.Send(ctx, chatID, text, ui.GetMainMenuWithProfileKeyboard(true))
+		return err
+	}
+
+	slog.Info("VPN created successfully",
+		"vpn_id", vpnConnection.ID,
+		"marzban_username", vpnConnection.MarzbanUsername,
+		"subscription_id", subscription.ID)
+
+	// Отправляем сообщение об успехе
+	text := fmt.Sprintf(`🎉 Оплата Stars завершена успешно!
+
+📦 План: %s
+💎 Оплачено: %d Stars (%.0f₽)
+⏰ Длительность: %d дней
+📅 Действует до: %s
+
+✅ Подписка активирована
+🔑 VPN ключ создан: %s
+
+Перейдите в "💳 Мои подписки" для получения конфигурации и настройки VPN.`,
+		plan.Name,
+		payment.TotalAmount,
+		plan.Price,
+		plan.Days,
+		subscription.EndDate.Format("02.01.2006 15:04"),
+		vpnConnection.Name)
+
+	keyboard := ui.GetMainMenuWithProfileKeyboard(true)
+
+	slog.Info("Sending success message to user", "user_id", userID)
+
+	return r.notifier.SendWithParseMode(ctx, chatID, text, "HTML", keyboard)
+}
+
+// handleUnknownCommand обрабатывает неизвестные команды
+func (r *Router) handleUnknownCommand(ctx context.Context, message *tgbotapi.Message) error {
+	userID := message.From.ID
+	chatID := message.Chat.ID
+	command := message.Command()
+
+	slog.Info("Unknown command received",
+		"user_id", userID,
+		"command", command,
+		"chat_id", chatID)
+
+	text := ui.GetUnknownCommandText()
+	keyboard := ui.GetUnknownCommandKeyboard()
+
+	return r.notifier.Send(ctx, chatID, text, keyboard)
+}
+
+// handleUnknownMessage обрабатывает неизвестные текстовые сообщения
+func (r *Router) handleUnknownMessage(ctx context.Context, message *tgbotapi.Message) error {
+	userID := message.From.ID
+	chatID := message.Chat.ID
+	messageText := message.Text
+
+	// Отправляем стандартное сообщение для неизвестных команд
+	slog.Info("Unknown message received",
+		"user_id", userID,
+		"message", messageText,
+		"chat_id", chatID)
+
+	text := ui.GetUnknownCommandText()
+	keyboard := ui.GetUnknownCommandKeyboard()
+
+	return r.notifier.Send(ctx, chatID, text, keyboard)
 }

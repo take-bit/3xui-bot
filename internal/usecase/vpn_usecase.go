@@ -54,6 +54,11 @@ func (uc *VPNUseCase) GetVPNConnectionByMarzbanUsername(ctx context.Context, use
 	return uc.vpnRepo.GetVPNConnectionByMarzbanUsername(ctx, username)
 }
 
+// GetVPNConnectionsBySubscription получает все VPN подключения для подписки
+func (uc *VPNUseCase) GetVPNConnectionsBySubscription(ctx context.Context, subscriptionID string) ([]*core.VPNConnection, error) {
+	return uc.vpnRepo.GetVPNConnectionsBySubscriptionID(ctx, subscriptionID)
+}
+
 // UpdateVPNConnectionName обновляет имя VPN подключения
 func (uc *VPNUseCase) UpdateVPNConnectionName(ctx context.Context, id, name string) error {
 	return uc.vpnRepo.UpdateVPNConnectionName(ctx, id, name)

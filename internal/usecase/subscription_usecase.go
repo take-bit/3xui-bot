@@ -1,11 +1,12 @@
 package usecase
 
 import (
-	"3xui-bot/internal/ports"
 	"context"
 	"time"
 
 	"3xui-bot/internal/core"
+	"3xui-bot/internal/pkg/id"
+	"3xui-bot/internal/ports"
 )
 
 // SubscriptionUseCase use case для работы с подписками
@@ -26,12 +27,13 @@ func NewSubscriptionUseCase(subRepo ports.SubscriptionRepo, planRepo ports.PlanR
 func (uc *SubscriptionUseCase) CreateSubscription(ctx context.Context, dto CreateSubscriptionDTO) (*core.Subscription, error) {
 	// Создаем новую подписку
 	newSub := &core.Subscription{
+		ID:        id.Generate(), // Генерируем уникальный ID
 		UserID:    dto.UserID,
 		Name:      dto.Name,
 		PlanID:    dto.PlanID,
-		StartDate: time.Now(),
-		EndDate:   time.Now().AddDate(0, 0, dto.Days),
-		IsActive:  true,
+		StartDate: dto.StartDate,
+		EndDate:   dto.EndDate,
+		IsActive:  dto.IsActive,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -51,6 +53,11 @@ func (uc *SubscriptionUseCase) GetUserSubscriptions(ctx context.Context, userID 
 
 // GetSubscription получает подписку по ID
 func (uc *SubscriptionUseCase) GetSubscription(ctx context.Context, userID int64, subscriptionID string) (*core.Subscription, error) {
+	return uc.subRepo.GetSubscriptionByID(ctx, subscriptionID)
+}
+
+// GetSubscriptionByID получает подписку по ID (алиас для удобства)
+func (uc *SubscriptionUseCase) GetSubscriptionByID(ctx context.Context, subscriptionID string) (*core.Subscription, error) {
 	return uc.subRepo.GetSubscriptionByID(ctx, subscriptionID)
 }
 
@@ -140,5 +147,10 @@ func (uc *SubscriptionUseCase) GetPlans(ctx context.Context) ([]*core.Plan, erro
 
 // GetPlan получает план по ID
 func (uc *SubscriptionUseCase) GetPlan(ctx context.Context, planID string) (*core.Plan, error) {
+	return uc.planRepo.GetPlanByID(ctx, planID)
+}
+
+// GetPlanByID получает план по ID (алиас для удобства)
+func (uc *SubscriptionUseCase) GetPlanByID(ctx context.Context, planID string) (*core.Plan, error) {
 	return uc.planRepo.GetPlanByID(ctx, planID)
 }
