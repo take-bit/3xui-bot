@@ -102,7 +102,7 @@ func (u *User) DeleteUser(ctx context.Context, telegramID int64) error {
 
 // MarkTrialAsUsed отмечает, что пользователь использовал пробный период
 func (u *User) MarkTrialAsUsed(ctx context.Context, userID int64) error {
-	query := `UPDATE users SET has_trial = TRUE, updated_at = $2 WHERE id = $1`
+	query := `UPDATE users SET has_trial = TRUE, updated_at = $2 WHERE telegram_id = $1`
 
 	result, err := u.dbGetter(ctx).Exec(ctx, query, userID, time.Now())
 	if err != nil {

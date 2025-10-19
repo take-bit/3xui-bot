@@ -23,11 +23,20 @@ func GetWelcomeKeyboard(hasTrialUsed bool) tgbotapi.InlineKeyboardMarkup {
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("🎉 Получить пробный доступ", "get_trial"),
 		))
+		// Показываем кнопку покупки только если нет пробного доступа
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Купить подписку", "open_pricing"),
+		))
+	} else {
+		// Если пробный доступ уже использован, показываем "Мои подписки"
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("🔑 Мои подписки", "my_subscriptions"),
+		))
+		// И кнопку покупки дополнительной подписки
+		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("💰 Купить подписку", "open_pricing"),
+		))
 	}
-
-	rows = append(rows, tgbotapi.NewInlineKeyboardRow(
-		tgbotapi.NewInlineKeyboardButtonData("💰 Купить подписку", "open_pricing"),
-	))
 
 	return tgbotapi.NewInlineKeyboardMarkup(rows...)
 }
@@ -137,30 +146,30 @@ func GetPaymentMethodKeyboard(planID string) tgbotapi.InlineKeyboardMarkup {
 	)
 }
 
-// GetSubscriptionsKeyboard возвращает клавиатуру со списком активных подписок
+// GetSubscriptionsKeyboard возвращает клавиатуру со списком всех подписок
 func GetSubscriptionsKeyboard(subscriptions []*core.Subscription) tgbotapi.InlineKeyboardMarkup {
 	var rows [][]tgbotapi.InlineKeyboardButton
 
-	// Фильтруем только активные подписки
-	var activeSubscriptions []*core.Subscription
-	for _, sub := range subscriptions {
-		if sub.IsActive && !sub.IsExpired() {
-			activeSubscriptions = append(activeSubscriptions, sub)
-		}
-	}
-
-	if len(activeSubscriptions) == 0 {
-		// Если активных подписок нет, показываем кнопку покупки
+	if len(subscriptions) == 0 {
+		// Если подписок нет, показываем кнопку покупки
 		rows = append(rows, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("💰 Купить подписку", "open_pricing"),
 		))
 	} else {
-		// Создаем кнопки для каждой активной подписки
-		for _, sub := range activeSubscriptions {
-			// Только кнопка просмотра подписки (с эмодзи ключа)
+		// Создаем кнопки для каждой подписки
+		for _, sub := range subscriptions {
+			// Определяем статус подписки для кнопки
+			var statusIcon string
+			if sub.IsActive && !sub.IsExpired() {
+				statusIcon = "🟢" // Активна
+			} else {
+				statusIcon = "⚪" // Истекла
+			}
+
+			// Кнопка просмотра подписки с статус-индикатором
 			viewCallbackData := fmt.Sprintf("view_subscription_%s", sub.ID)
 			viewButton := tgbotapi.NewInlineKeyboardButtonData(
-				fmt.Sprintf("🔑 %s", sub.GetDisplayName()),
+				fmt.Sprintf("%s %s", statusIcon, sub.GetDisplayName()),
 				viewCallbackData)
 			rows = append(rows, tgbotapi.NewInlineKeyboardRow(viewButton))
 		}
@@ -395,32 +404,32 @@ func GetPaymentMethodText(plan *core.Plan) string {
 Выберите способ оплаты:`, plan.Name, plan.Price, FormatDuration(plan.Days))
 }
 
-// GetSubscriptionsText возвращает текст со списком активных подписок в MarkdownV2 формате
+// GetSubscriptionsText возвращает текст со списком всех подписок в MarkdownV2 формате
 func GetSubscriptionsText(subscriptions []*core.Subscription) string {
-	// Фильтруем только активные подписки
-	var activeSubscriptions []*core.Subscription
-	for _, sub := range subscriptions {
-		if sub.IsActive && !sub.IsExpired() {
-			activeSubscriptions = append(activeSubscriptions, sub)
-		}
-	}
-
 	text := "*🔑 Список ваших подписок:*\n\n"
 
-	if len(activeSubscriptions) == 0 {
-		text += "У вас пока нет активных подписок\\.\n\n"
+	if len(subscriptions) == 0 {
+		text += "У вас пока нет подписок\\.\n\n"
 		text += "💡 Создайте подписку, чтобы получить доступ к VPN сервисам\\!"
 	} else {
-		for i, sub := range activeSubscriptions {
+		for i, sub := range subscriptions {
 			// Экранируем специальные символы для MarkdownV2
 			displayName := EscapeMarkdownV2(sub.GetDisplayName())
 			dateStr := EscapeMarkdownV2(sub.EndDate.Format("02.01.06, 15:04"))
 
-			// Отображаем каждую подписку в отдельной цитате с фиолетовой полосой
-			text += fmt.Sprintf("> • %s \\(до %s\\) »\n", displayName, dateStr)
+			// Определяем статус подписки
+			var statusIcon string
+			if sub.IsActive && !sub.IsExpired() {
+				statusIcon = "🟢" // Активна
+			} else {
+				statusIcon = "⚪" // Истекла
+			}
+
+			// Отображаем каждую подписку в отдельной цитате с статус-индикатором
+			text += fmt.Sprintf("> %s • %s \\(до %s\\) »\n", statusIcon, displayName, dateStr)
 
 			// Добавляем пустую строку между подписками (кроме последней)
-			if i < len(activeSubscriptions)-1 {
+			if i < len(subscriptions)-1 {
 				text += "\n"
 			}
 		}

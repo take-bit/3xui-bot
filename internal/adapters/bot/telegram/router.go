@@ -59,13 +59,7 @@ func NewRouter(
 
 	// Инициализируем handlers
 	r.startHandler = handlers.NewStartHandler(bot, notifier, userUC, subUC)
-
-	// notifier должен реализовывать ports.BotPort (TelegramNotifier реализует оба интерфейса)
-	botPort, ok := notifier.(ports.BotPort)
-	if !ok {
-		panic("notifier must implement ports.BotPort")
-	}
-	r.callbackHandler = handlers.NewCallbackHandler(userUC, subUC, vpnUC, botPort, slog.Default())
+	r.callbackHandler = handlers.NewCallbackHandler(r) // Передаем Router как controller
 	r.paymentHandler = handlers.NewPaymentHandler(bot, paymentUC)
 	r.vpnHandler = handlers.NewVPNHandler(bot, vpnUC)
 
@@ -304,7 +298,18 @@ func (r *Router) handleUnknownMessage(ctx context.Context, message *tgbotapi.Mes
 	chatID := message.Chat.ID
 	messageText := message.Text
 
-	// Отправляем стандартное сообщение для неизвестных команд
+	// Сначала проверяем, не находится ли пользователь в процессе переименования подписки
+	handled, err := r.callbackHandler.HandleTextMessage(ctx, userID, chatID, messageText)
+	if err != nil {
+		slog.Error("Error handling text message", "error", err, "user_id", userID)
+		return err
+	}
+	
+	if handled {
+		return nil // Сообщение обработано (переименование подписки)
+	}
+
+	// Если не обработано, отправляем стандартное сообщение для неизвестных команд
 	slog.Info("Unknown message received",
 		"user_id", userID,
 		"message", messageText,
@@ -314,4 +319,60 @@ func (r *Router) handleUnknownMessage(ctx context.Context, message *tgbotapi.Mes
 	keyboard := ui.GetUnknownCommandKeyboard()
 
 	return r.notifier.Send(ctx, chatID, text, keyboard)
+}
+
+// ============================================================================
+// МЕТОДЫ ДЛЯ ИНТЕРФЕЙСА КОНТРОЛЛЕРА (для CallbackHandler)
+// ============================================================================
+
+func (r *Router) Bot() *tgbotapi.BotAPI {
+	return r.bot
+}
+
+func (r *Router) UserUC() *usecase.UserUseCase {
+	return r.userUC
+}
+
+func (r *Router) SubUC() *usecase.SubscriptionUseCase {
+	return r.subUC
+}
+
+func (r *Router) VpnUC() *usecase.VPNUseCase {
+	return r.vpnUC
+}
+
+func (r *Router) PaymentUC() *usecase.PaymentUseCase {
+	return r.paymentUC
+}
+
+func (r *Router) ReferralUC() *usecase.ReferralUseCase {
+	return r.referralUC
+}
+
+func (r *Router) EditMessageText(ctx context.Context, chatID int64, messageID int, text string, replyMarkup interface{}) error {
+	edit := tgbotapi.NewEditMessageText(chatID, messageID, text)
+	if replyMarkup != nil {
+		if keyboard, ok := replyMarkup.(tgbotapi.InlineKeyboardMarkup); ok {
+			edit.ReplyMarkup = &keyboard
+		}
+	}
+	_, err := r.bot.Send(edit)
+	return err
+}
+
+func (r *Router) AnswerCallbackQuery(ctx context.Context, callbackQueryID, text string, showAlert bool) error {
+	callback := tgbotapi.NewCallback(callbackQueryID, text)
+	callback.ShowAlert = showAlert
+	_, err := r.bot.Request(callback)
+	return err
+}
+
+func (r *Router) SendMessage(ctx context.Context, chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	_, err := r.bot.Send(msg)
+	return err
+}
+
+func (r *Router) LogError(err error, context string) {
+	slog.Error("Error in context", "context", context, "error", err)
 }
