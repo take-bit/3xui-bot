@@ -59,7 +59,7 @@ func NewRouter(
 
 	// Инициализируем handlers
 	r.startHandler = handlers.NewStartHandler(bot, notifier, userUC, subUC)
-	r.callbackHandler = handlers.NewCallbackHandler(r) // Передаем Router как controller
+	r.callbackHandler = handlers.NewCallbackHandler(userUC, subUC, paymentUC, vpnUC, referralUC, notifUC, bot)
 	r.paymentHandler = handlers.NewPaymentHandler(bot, paymentUC)
 	r.vpnHandler = handlers.NewVPNHandler(bot, vpnUC)
 
