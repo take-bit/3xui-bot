@@ -24,8 +24,8 @@ func (h *BaseHandler) HandleMySubscriptions(ctx context.Context, userID, chatID 
 
 	text := ui.GetSubscriptionsText(subscriptions)
 	keyboard := ui.GetSubscriptionsKeyboard(subscriptions)
-	// Используем deleteAndSendMessageWithMarkdownV2 для корректного форматирования
-	return h.msg.DeleteAndSendMessageWithMarkdownV2(ctx, chatID, messageID, text, keyboard)
+	_ = h.msg.DeleteMessage(ctx, chatID, messageID)
+	return h.msg.SendPhotoWithPreEscapedMarkdown(ctx, chatID, "static/images/bot_banner.png", text, keyboard)
 }
 
 // HandleCreateSubscription handles the create_subscription callback
@@ -41,7 +41,7 @@ func (h *BaseHandler) HandleCreateSubscription(ctx context.Context, userID, chat
 
 	text := ui.GetPricingText(plans)
 	keyboard := ui.GetPricingKeyboard(plans)
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleSelectPlan handles the select_plan callback
@@ -159,7 +159,7 @@ func (h *BaseHandler) HandleViewSubscription(ctx context.Context, userID, chatID
 
 	text := ui.GetSubscriptionDetailText(subscription, plan, vpnConfigs)
 	keyboard := ui.GetSubscriptionDetailKeyboard(subscription, vpnConfigs)
-	return h.msg.EditMessageWithMarkdownV2(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessageWithMarkdownV2(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleRenameSubscription handles the rename_subscription callback
@@ -202,7 +202,7 @@ func (h *BaseHandler) HandleExtendSubscription(ctx context.Context, userID, chat
 
 	text := ui.GetExtendSubscriptionText(subscription)
 	keyboard := ui.GetExtendSubscriptionKeyboard(subscriptionID, plans)
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleDeleteSubscription handles the delete_subscription callback
@@ -218,7 +218,7 @@ func (h *BaseHandler) HandleDeleteSubscription(ctx context.Context, userID, chat
 
 	text := ui.GetDeleteSubscriptionText(subscription)
 	keyboard := ui.GetBackToPricingKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleExtendSubscriptionByPlan handles the extend_subscription_by_plan callback
@@ -244,7 +244,7 @@ func (h *BaseHandler) HandleExtendSubscriptionByPlan(ctx context.Context, userID
 
 	text := fmt.Sprintf("✅ Подписка продлена на %d дней!", plan.Days)
 	keyboard := ui.GetBackToPricingKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // ============================================================================

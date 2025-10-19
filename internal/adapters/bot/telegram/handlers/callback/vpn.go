@@ -13,7 +13,7 @@ func (h *BaseHandler) HandleOpenKeys(ctx context.Context, userID, chatID int64, 
 
 	text := ui.GetKeysText()
 	keyboard := ui.GetKeysKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleMyConfigs handles the my_configs callback
@@ -22,7 +22,7 @@ func (h *BaseHandler) HandleMyConfigs(ctx context.Context, userID, chatID int64,
 
 	text := "🔑 Мои конфигурации\n\nЗдесь будут ваши VPN конфигурации"
 	keyboard := ui.GetBackToPricingKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleCreateWireguard handles the create_wireguard callback

@@ -28,9 +28,10 @@ func (h *BaseHandler) HandleOpenMenu(ctx context.Context, userID, chatID int64, 
 			}
 		}
 	}
+	_ = h.msg.DeleteMessage(ctx, chatID, messageID)
 	text := ui.GetMainMenuWithProfileText(user, isPremium, statusText, subUntilText)
 	keyboard := ui.GetMainMenuWithProfileKeyboard(isPremium)
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.SendPhotoWithMarkdown(ctx, chatID, "static/images/bot_banner.png", text, keyboard)
 }
 
 func (h *BaseHandler) HandleOpenProfile(ctx context.Context, userID, chatID int64, messageID int) error {
@@ -52,7 +53,7 @@ func (h *BaseHandler) HandleOpenProfile(ctx context.Context, userID, chatID int6
 	}
 	text := ui.GetProfileText(user, isPremium, "", "")
 	keyboard := ui.GetProfileKeyboard(isPremium)
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 func (h *BaseHandler) HandleOpenPricing(ctx context.Context, userID, chatID int64, messageID int) error {
@@ -62,7 +63,15 @@ func (h *BaseHandler) HandleOpenPricing(ctx context.Context, userID, chatID int6
 		h.logError(err, "GetPlans")
 		return err
 	}
+	_ = h.msg.DeleteMessage(ctx, chatID, messageID)
 	text := ui.GetPricingText(plans)
 	keyboard := ui.GetPricingKeyboard(plans)
+	return h.msg.SendPhotoWithMarkdown(ctx, chatID, "static/images/bot_banner.png", text, keyboard)
+}
+
+func (h *BaseHandler) HandleShowInstruction(ctx context.Context, userID, chatID int64, messageID int) error {
+	slog.Info("Handling show instruction", "user_id", userID)
+	text := ui.GetInstructionText()
+	keyboard := ui.GetBackToPricingKeyboard()
 	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }

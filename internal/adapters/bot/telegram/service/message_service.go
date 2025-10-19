@@ -2,6 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"regexp"
+	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -106,4 +110,75 @@ func (s *MessageService) AnswerCallbackQuery(ctx context.Context, callbackQueryI
 	ack.ShowAlert = showAlert
 	_, err := s.bot.Request(ack)
 	return err
+}
+
+func (s *MessageService) SendPhotoWithMarkdown(ctx context.Context, chatID int64, imagePath string, caption string, keyboard interface{}) error {
+	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FilePath(imagePath))
+	photo.Caption = escapeMarkdownV2(caption)
+	photo.ParseMode = "MarkdownV2"
+	if keyboard != nil {
+		if kb, ok := keyboard.(tgbotapi.InlineKeyboardMarkup); ok {
+			photo.ReplyMarkup = kb
+		}
+	}
+	_, err := s.bot.Send(photo)
+	if err != nil {
+		slog.Error("Failed to send photo with markdown", "chat_id", chatID, "image_path", imagePath, "error", err)
+	}
+	return err
+}
+
+func (s *MessageService) SendPhotoWithPreEscapedMarkdown(ctx context.Context, chatID int64, imagePath string, caption string, keyboard interface{}) error {
+	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FilePath(imagePath))
+	photo.Caption = caption
+	photo.ParseMode = "MarkdownV2"
+	if keyboard != nil {
+		if kb, ok := keyboard.(tgbotapi.InlineKeyboardMarkup); ok {
+			photo.ReplyMarkup = kb
+		}
+	}
+	_, err := s.bot.Send(photo)
+	if err != nil {
+		slog.Error("Failed to send photo with pre-escaped markdown", "chat_id", chatID, "image_path", imagePath, "error", err)
+	}
+	return err
+}
+
+var (
+	markdownV2Replacer = strings.NewReplacer(
+		"_", "\\_",
+		"*", "\\*",
+		"[", "\\[",
+		"]", "\\]",
+		"(", "\\(",
+		")", "\\)",
+		"~", "\\~",
+		"`", "\\`",
+		">", "\\>",
+		"#", "\\#",
+		"+", "\\+",
+		"-", "\\-",
+		"=", "\\=",
+		"|", "\\|",
+		"{", "\\{",
+		"}", "\\}",
+		".", "\\.",
+		"!", "\\!",
+	)
+	linkPattern = regexp.MustCompile(`\[[^\]]+\]\([^)]+\)`)
+)
+
+func escapeMarkdownV2(text string) string {
+	links := make(map[string]string)
+	matches := linkPattern.FindAllString(text, -1)
+	for i, match := range matches {
+		placeholder := fmt.Sprintf("\x00LINK%d\x00", i)
+		links[placeholder] = match
+		text = strings.Replace(text, match, placeholder, 1)
+	}
+	text = markdownV2Replacer.Replace(text)
+	for placeholder, original := range links {
+		text = strings.Replace(text, placeholder, original, 1)
+	}
+	return text
 }

@@ -13,7 +13,7 @@ func (h *BaseHandler) HandleOpenReferrals(ctx context.Context, userID, chatID in
 
 	text := ui.GetReferralsText()
 	keyboard := ui.GetReferralsKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleReferralStats handles the referral_stats callback
@@ -22,7 +22,7 @@ func (h *BaseHandler) HandleReferralStats(ctx context.Context, userID, chatID in
 
 	text := ui.GetReferralRankingText()
 	keyboard := ui.GetReferralRankingKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleMyReferrals handles the my_referrals callback
@@ -31,7 +31,7 @@ func (h *BaseHandler) HandleMyReferrals(ctx context.Context, userID, chatID int6
 
 	text := "👥 Мои реферралы\n\nЗдесь будет информация о ваших реферралах"
 	keyboard := ui.GetBackToPricingKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleMyReferralLink handles the my_referral_link callback
@@ -40,5 +40,5 @@ func (h *BaseHandler) HandleMyReferralLink(ctx context.Context, userID, chatID i
 
 	text := "🔗 Моя реферальная ссылка\n\nЗдесь будет ваша реферальная ссылка"
 	keyboard := ui.GetBackToPricingKeyboard()
-	return h.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }

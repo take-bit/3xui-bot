@@ -45,9 +45,9 @@ func (h *BaseHandler) HandleGetTrial(ctx context.Context, userID, chatID int64, 
 		text = "❌ Пробный доступ уже был использован"
 	}
 
+	_ = h.msg.DeleteMessage(ctx, chatID, messageID)
 	keyboard := ui.GetWelcomeKeyboard(user.HasTrial)
-	// Используем deleteAndSendMessage, т.к. приветственное сообщение может быть с фото
-	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
+	return h.msg.SendPhotoWithMarkdown(ctx, chatID, "static/images/bot_banner.png", text, keyboard)
 }
 
 // createTrialSubscription создает пробную подписку на 3 дня

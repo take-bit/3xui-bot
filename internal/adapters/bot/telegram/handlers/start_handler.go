@@ -3,8 +3,8 @@ package handlers
 import (
 	"context"
 	"log/slog"
-	"os"
 
+	"3xui-bot/internal/adapters/bot/telegram/service"
 	"3xui-bot/internal/adapters/bot/telegram/ui"
 	"3xui-bot/internal/ports"
 	"3xui-bot/internal/usecase"
@@ -12,21 +12,21 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// StartHandler обрабатывает команду /start
 type StartHandler struct {
 	bot      *tgbotapi.BotAPI
 	notifier ports.Notifier
 	userUC   *usecase.UserUseCase
 	subUC    *usecase.SubscriptionUseCase
+	msg      *service.MessageService
 }
 
-// NewStartHandler создает новый обработчик команды /start
 func NewStartHandler(bot *tgbotapi.BotAPI, notifier ports.Notifier, userUC *usecase.UserUseCase, subUC *usecase.SubscriptionUseCase) *StartHandler {
 	return &StartHandler{
 		bot:      bot,
 		notifier: notifier,
 		userUC:   userUC,
 		subUC:    subUC,
+		msg:      service.NewMessageService(bot),
 	}
 }
 
@@ -96,39 +96,9 @@ func (h *StartHandler) Handle(ctx context.Context, message *tgbotapi.Message) er
 		keyboard = ui.GetMainMenuWithProfileKeyboard(isPremium)
 	}
 
-	// Отправляем сообщение с фото
-	return h.sendMessageWithPhoto(ctx, chatID, text, keyboard)
+	return h.msg.SendPhotoWithMarkdown(ctx, chatID, "static/images/bot_banner.png", text, keyboard)
 }
 
-// sendMessageWithPhoto отправляет сообщение с фото (универсальный метод)
-func (h *StartHandler) sendMessageWithPhoto(ctx context.Context, chatID int64, caption string, keyboard tgbotapi.InlineKeyboardMarkup) error {
-	photoPath := "static/images/bot_banner.png"
-
-	// Проверяем существование файла
-	if _, fileErr := os.Stat(photoPath); fileErr == nil {
-		err := h.notifier.SendPhotoFromFile(ctx, chatID, photoPath, caption, keyboard)
-		if err != nil {
-			// Если не удалось отправить фото, отправляем обычное сообщение
-			slog.Warn("Failed to send photo, sending text message", "error", err)
-			msg := tgbotapi.NewMessage(chatID, caption)
-			msg.ReplyMarkup = keyboard
-			msg.ParseMode = "HTML"
-			_, err = h.bot.Send(msg)
-			return err
-		}
-		return nil
-	}
-
-	// Если файла нет, отправляем обычное сообщение
-	slog.Info("Photo file not found, sending text message", "path", photoPath)
-	msg := tgbotapi.NewMessage(chatID, caption)
-	msg.ReplyMarkup = keyboard
-	msg.ParseMode = "HTML"
-	_, err := h.bot.Send(msg)
-	return err
-}
-
-// sendError отправляет сообщение об ошибке
 func (h *StartHandler) sendError(chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, "❌ "+text)
 	_, err := h.bot.Send(msg)

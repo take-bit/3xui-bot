@@ -55,6 +55,7 @@ func (r *Router) setupRoutes() {
 	r.routes["open_profile"] = r.baseHandler.HandleOpenProfile
 	r.routes["open_pricing"] = r.baseHandler.HandleOpenPricing
 	r.routes["open_support"] = r.baseHandler.HandleOpenSupport
+	r.routes["show_instruction"] = r.baseHandler.HandleShowInstruction
 
 	// Subscription routes
 	r.routes["my_subscriptions"] = r.baseHandler.HandleMySubscriptions
@@ -156,7 +157,7 @@ func (r *Router) handleParameterizedCallback(ctx context.Context, userID, chatID
 	// Unknown callback
 	text := ui.GetUnknownCommandText()
 	keyboard := ui.GetUnknownCommandKeyboard()
-	return r.baseHandler.msg.EditMessageText(ctx, chatID, messageID, text, keyboard)
+	return r.baseHandler.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }
 
 // HandleTextMessage handles text messages (for renaming subscriptions)
@@ -223,14 +224,14 @@ func (r *Router) HandleTextMessage(ctx context.Context, userID int64, chatID int
 func (r *Router) handleViewConfig(ctx context.Context, userID, chatID int64, messageID int, configID string) error {
 	slog.Info("Handling view config", "config_id", configID, "user_id", userID)
 	text := "🔑 Просмотр конфигурации\n\nКонфигурация: " + configID
-	return r.baseHandler.msg.EditMessageText(ctx, chatID, messageID, text, nil)
+	return r.baseHandler.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, nil)
 }
 
 // handleConnectionGuide handles connection_guide callback (placeholder)
 func (r *Router) handleConnectionGuide(ctx context.Context, userID, chatID int64, messageID int, configID string) error {
 	slog.Info("Handling connection guide", "config_id", configID, "user_id", userID)
 	text := "📖 Руководство по подключению\n\nКонфигурация: " + configID
-	return r.baseHandler.msg.EditMessageText(ctx, chatID, messageID, text, nil)
+	return r.baseHandler.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, nil)
 }
 
 // handleCreateSubscriptionByPlan handles create_subscription_by_plan callback
