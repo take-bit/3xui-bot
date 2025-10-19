@@ -304,7 +304,7 @@ func (r *Router) handleUnknownMessage(ctx context.Context, message *tgbotapi.Mes
 		slog.Error("Error handling text message", "error", err, "user_id", userID)
 		return err
 	}
-	
+
 	if handled {
 		return nil // Сообщение обработано (переименование подписки)
 	}

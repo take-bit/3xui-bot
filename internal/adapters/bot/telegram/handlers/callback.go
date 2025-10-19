@@ -1020,7 +1020,7 @@ func (h *CallbackHandler) HandleTextMessage(ctx context.Context, userID int64, c
 
 	text := ui.GetSubscriptionDetailText(subscription, plan, vpnConfigs)
 	keyboard := ui.GetSubscriptionDetailKeyboard(subscription, vpnConfigs)
-	
+
 	return true, h.sendMessageWithKeyboard(ctx, chatID, text, keyboard)
 }
 
