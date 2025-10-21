@@ -11,5 +11,6 @@ func (h *BaseHandler) HandleOpenSupport(ctx context.Context, userID, chatID int6
 	slog.Info("Handling open support", "user_id", userID)
 	text := ui.GetSupportText()
 	keyboard := ui.GetBackToPricingKeyboard()
+
 	return h.msg.DeleteAndSendMessage(ctx, chatID, messageID, text, keyboard)
 }

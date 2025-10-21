@@ -15,6 +15,7 @@ type Notification struct {
 }
 
 func NewNotification(dbGetter transactorPgx.DBGetter) *Notification {
+
 	return &Notification{
 		dbGetter: dbGetter,
 	}
@@ -32,6 +33,7 @@ func (n *Notification) CreateNotification(ctx context.Context, notification *cor
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to create notification: %w", err)
 	}
 
@@ -51,6 +53,7 @@ func (n *Notification) GetNotificationByID(ctx context.Context, id string) (*cor
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -65,6 +68,7 @@ func (n *Notification) GetNotificationsByUserID(ctx context.Context, userID int6
 
 	rows, err := n.dbGetter(ctx).Query(ctx, query, userID)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to get notifications by user ID: %w", err)
 	}
 	defer rows.Close()
@@ -78,12 +82,14 @@ func (n *Notification) GetNotificationsByUserID(ctx context.Context, userID int6
 			&notification.CreatedAt,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan notification: %w", err)
 		}
 		notifications = append(notifications, notification)
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("error iterating notifications: %w", err)
 	}
 
@@ -98,6 +104,7 @@ func (n *Notification) GetUnreadNotificationsByUserID(ctx context.Context, userI
 
 	rows, err := n.dbGetter(ctx).Query(ctx, query, userID)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to get unread notifications by user ID: %w", err)
 	}
 	defer rows.Close()
@@ -111,12 +118,14 @@ func (n *Notification) GetUnreadNotificationsByUserID(ctx context.Context, userI
 			&notification.CreatedAt,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan notification: %w", err)
 		}
 		notifications = append(notifications, notification)
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("error iterating notifications: %w", err)
 	}
 
@@ -125,7 +134,7 @@ func (n *Notification) GetUnreadNotificationsByUserID(ctx context.Context, userI
 
 func (n *Notification) UpdateNotification(ctx context.Context, notification *core.Notification) error {
 	query := `
-		UPDATE notifications 
+		UPDATE notifications
 		SET type = $2, title = $3, message = $4, is_read = $5
 		WHERE id = $1`
 
@@ -135,10 +144,12 @@ func (n *Notification) UpdateNotification(ctx context.Context, notification *cor
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to update notification: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
+
 		return usecase.ErrNotFound
 	}
 
@@ -150,10 +161,12 @@ func (n *Notification) MarkAsRead(ctx context.Context, id string) error {
 
 	result, err := n.dbGetter(ctx).Exec(ctx, query, id)
 	if err != nil {
+
 		return fmt.Errorf("failed to mark notification as read: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
+
 		return usecase.ErrNotFound
 	}
 
@@ -165,6 +178,7 @@ func (n *Notification) DeleteNotification(ctx context.Context, id string) error 
 
 	_, err := n.dbGetter(ctx).Exec(ctx, query, id)
 	if err != nil {
+
 		return fmt.Errorf("failed to delete notification: %w", err)
 	}
 

@@ -16,6 +16,7 @@ type Referral struct {
 }
 
 func NewReferral(dbGetter transactorPgx.DBGetter) *Referral {
+
 	return &Referral{
 		dbGetter: dbGetter,
 	}
@@ -32,6 +33,7 @@ func (r *Referral) CreateReferral(ctx context.Context, referral *core.Referral) 
 	).Scan(&referral.ID)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to create referral: %w", err)
 	}
 
@@ -49,8 +51,10 @@ func (r *Referral) GetReferralByID(ctx context.Context, id int64) (*core.Referra
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
+
 			return nil, usecase.ErrNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get referral by ID: %w", err)
 	}
 
@@ -65,6 +69,7 @@ func (r *Referral) GetReferralsByReferrerID(ctx context.Context, referrerID int6
 
 	rows, err := r.dbGetter(ctx).Query(ctx, query, referrerID)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to get referrals by referrer ID: %w", err)
 	}
 	defer rows.Close()
@@ -76,12 +81,14 @@ func (r *Referral) GetReferralsByReferrerID(ctx context.Context, referrerID int6
 			&referral.ID, &referral.ReferrerID, &referral.RefereeID, &referral.CreatedAt,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan referral: %w", err)
 		}
 		referrals = append(referrals, referral)
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("error iterating referrals: %w", err)
 	}
 
@@ -99,6 +106,7 @@ func (r *Referral) GetReferralByRefereeID(ctx context.Context, refereeID int64) 
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -110,18 +118,19 @@ func (r *Referral) DeleteReferral(ctx context.Context, id int64) error {
 
 	_, err := r.dbGetter(ctx).Exec(ctx, query, id)
 	if err != nil {
+
 		return fmt.Errorf("failed to delete referral: %w", err)
 	}
 
 	return nil
 }
 
-// ReferralLink структура для работы с реферальными ссылками
 type ReferralLink struct {
 	dbGetter transactorPgx.DBGetter
 }
 
 func NewReferralLink(dbGetter transactorPgx.DBGetter) *ReferralLink {
+
 	return &ReferralLink{
 		dbGetter: dbGetter,
 	}
@@ -138,6 +147,7 @@ func (rl *ReferralLink) CreateReferralLink(ctx context.Context, link *core.Refer
 	).Scan(&link.ID)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to create referral link: %w", err)
 	}
 
@@ -156,8 +166,10 @@ func (rl *ReferralLink) GetReferralLinkByID(ctx context.Context, id int64) (*cor
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
+
 			return nil, usecase.ErrNotFound
 		}
+
 		return nil, fmt.Errorf("failed to get referral link by ID: %w", err)
 	}
 
@@ -176,6 +188,7 @@ func (rl *ReferralLink) GetReferralLinkByUserID(ctx context.Context, userID int6
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -194,6 +207,7 @@ func (rl *ReferralLink) GetReferralLinkByLink(ctx context.Context, link string) 
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -202,7 +216,7 @@ func (rl *ReferralLink) GetReferralLinkByLink(ctx context.Context, link string) 
 
 func (rl *ReferralLink) UpdateReferralLink(ctx context.Context, link *core.ReferralLink) error {
 	query := `
-		UPDATE referral_links 
+		UPDATE referral_links
 		SET link = $2, is_active = $3, updated_at = $4
 		WHERE id = $1`
 
@@ -211,10 +225,12 @@ func (rl *ReferralLink) UpdateReferralLink(ctx context.Context, link *core.Refer
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to update referral link: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
+
 		return usecase.ErrNotFound
 	}
 
@@ -226,6 +242,7 @@ func (rl *ReferralLink) DeleteReferralLink(ctx context.Context, id int64) error 
 
 	_, err := rl.dbGetter(ctx).Exec(ctx, query, id)
 	if err != nil {
+
 		return fmt.Errorf("failed to delete referral link: %w", err)
 	}
 

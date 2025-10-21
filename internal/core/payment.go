@@ -4,7 +4,6 @@ import (
 	"time"
 )
 
-// Payment представляет платеж
 type Payment struct {
 	ID            string    `json:"id"`
 	UserID        int64     `json:"user_id"`
@@ -17,7 +16,6 @@ type Payment struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// PaymentStatus представляет статус платежа
 type PaymentStatus string
 
 const (
@@ -27,22 +25,22 @@ const (
 	PaymentStatusCancelled PaymentStatus = "cancelled"
 )
 
-// IsPending проверяет, находится ли платеж в ожидании
 func (p *Payment) IsPending() bool {
+
 	return p.Status == string(PaymentStatusPending)
 }
 
-// IsCompleted проверяет, завершен ли платеж
 func (p *Payment) IsCompleted() bool {
+
 	return p.Status == string(PaymentStatusCompleted)
 }
 
-// IsFailed проверяет, провален ли платеж
 func (p *Payment) IsFailed() bool {
+
 	return p.Status == string(PaymentStatusFailed)
 }
 
-// IsCancelled проверяет, отменен ли платеж
 func (p *Payment) IsCancelled() bool {
+
 	return p.Status == string(PaymentStatusCancelled)
 }

@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// CreateUserDTO данные для создания пользователя
 type CreateUserDTO struct {
 	TelegramID   int64
 	Username     string
@@ -14,7 +13,6 @@ type CreateUserDTO struct {
 	LanguageCode string
 }
 
-// CreateSubscriptionDTO данные для создания подписки
 type CreateSubscriptionDTO struct {
 	UserID    int64
 	Name      string
@@ -25,7 +23,6 @@ type CreateSubscriptionDTO struct {
 	IsActive  bool
 }
 
-// CreatePaymentDTO данные для создания платежа
 type CreatePaymentDTO struct {
 	UserID        int64
 	Amount        float64
@@ -34,14 +31,12 @@ type CreatePaymentDTO struct {
 	Description   string
 }
 
-// CreateConfigDTO данные для создания VPN конфигурации
 type CreateConfigDTO struct {
 	UserID     int64
 	Name       string
 	ConfigType string
 }
 
-// SendNotificationDTO данные для отправки уведомления
 type SendNotificationDTO struct {
 	UserID  int64
 	Type    core.NotificationType
@@ -49,7 +44,6 @@ type SendNotificationDTO struct {
 	Message string
 }
 
-// CreateNotificationDTO данные для создания уведомления
 type CreateNotificationDTO struct {
 	UserID  int64
 	Type    string

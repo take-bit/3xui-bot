@@ -15,6 +15,7 @@ type Subscription struct {
 }
 
 func NewSubscription(dbGetter transactorPgx.DBGetter) *Subscription {
+
 	return &Subscription{
 		dbGetter: dbGetter,
 	}
@@ -32,6 +33,7 @@ func (s *Subscription) CreateSubscription(ctx context.Context, subscription *cor
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to create subscription: %w", err)
 	}
 
@@ -51,6 +53,7 @@ func (s *Subscription) GetSubscriptionByID(ctx context.Context, id string) (*cor
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -65,6 +68,7 @@ func (s *Subscription) GetSubscriptionsByUserID(ctx context.Context, userID int6
 
 	rows, err := s.dbGetter(ctx).Query(ctx, query, userID)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to get subscriptions by user ID: %w", err)
 	}
 	defer rows.Close()
@@ -78,12 +82,14 @@ func (s *Subscription) GetSubscriptionsByUserID(ctx context.Context, userID int6
 			&subscription.CreatedAt, &subscription.UpdatedAt,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan subscription: %w", err)
 		}
 		subscriptions = append(subscriptions, subscription)
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("error iterating subscriptions: %w", err)
 	}
 
@@ -93,7 +99,7 @@ func (s *Subscription) GetSubscriptionsByUserID(ctx context.Context, userID int6
 func (s *Subscription) GetActiveSubscriptionByUserID(ctx context.Context, userID int64) (*core.Subscription, error) {
 	query := `
 		SELECT id, user_id, name, plan_id, start_date, end_date, is_active, created_at, updated_at
-		FROM subscriptions 
+		FROM subscriptions
 		WHERE user_id = $1 AND is_active = true AND end_date > NOW()
 		ORDER BY created_at DESC
 		LIMIT 1`
@@ -106,6 +112,7 @@ func (s *Subscription) GetActiveSubscriptionByUserID(ctx context.Context, userID
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -114,8 +121,8 @@ func (s *Subscription) GetActiveSubscriptionByUserID(ctx context.Context, userID
 
 func (s *Subscription) UpdateSubscription(ctx context.Context, subscription *core.Subscription) error {
 	query := `
-		UPDATE subscriptions 
-		SET name = $2, plan_id = $3, start_date = $4, end_date = $5, 
+		UPDATE subscriptions
+		SET name = $2, plan_id = $3, start_date = $4, end_date = $5,
 		    is_active = $6, updated_at = $7
 		WHERE id = $1`
 
@@ -126,10 +133,12 @@ func (s *Subscription) UpdateSubscription(ctx context.Context, subscription *cor
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to update subscription: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
+
 		return usecase.ErrNotFound
 	}
 
@@ -141,18 +150,19 @@ func (s *Subscription) DeleteSubscription(ctx context.Context, id string) error 
 
 	_, err := s.dbGetter(ctx).Exec(ctx, query, id)
 	if err != nil {
+
 		return fmt.Errorf("failed to delete subscription: %w", err)
 	}
 
 	return nil
 }
 
-// Plan repository
 type Plan struct {
 	dbGetter transactorPgx.DBGetter
 }
 
 func NewPlan(dbGetter transactorPgx.DBGetter) *Plan {
+
 	return &Plan{
 		dbGetter: dbGetter,
 	}
@@ -166,6 +176,7 @@ func (p *Plan) GetAll(ctx context.Context) ([]*core.Plan, error) {
 
 	rows, err := p.dbGetter(ctx).Query(ctx, query)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to get all plans: %w", err)
 	}
 	defer rows.Close()
@@ -178,12 +189,14 @@ func (p *Plan) GetAll(ctx context.Context) ([]*core.Plan, error) {
 			&plan.Days, &plan.IsActive,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan plan: %w", err)
 		}
 		plans = append(plans, plan)
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("error iterating plans: %w", err)
 	}
 
@@ -202,6 +215,7 @@ func (p *Plan) GetPlanByID(ctx context.Context, id string) (*core.Plan, error) {
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 

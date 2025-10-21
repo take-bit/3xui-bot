@@ -2,7 +2,6 @@ package ports
 
 import "context"
 
-// BotPort — абстракция операций отправки/редактирования сообщений и ACK callback.
 type BotPort interface {
 	Send(ctx context.Context, chatID int64, text string, markup any) error
 	Edit(ctx context.Context, chatID int64, messageID int, text string, markup any) error

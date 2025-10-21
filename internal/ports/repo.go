@@ -6,7 +6,6 @@ import (
 	"3xui-bot/internal/core"
 )
 
-// UserRepo интерфейс для работы с пользователями
 type UserRepo interface {
 	CreateUser(ctx context.Context, user *core.User) error
 	GetUserByID(ctx context.Context, id int64) (*core.User, error)
@@ -15,7 +14,6 @@ type UserRepo interface {
 	MarkTrialAsUsed(ctx context.Context, userID int64) error
 }
 
-// SubscriptionRepo интерфейс для работы с подписками
 type SubscriptionRepo interface {
 	CreateSubscription(ctx context.Context, subscription *core.Subscription) error
 	GetSubscriptionByID(ctx context.Context, id string) (*core.Subscription, error)
@@ -25,13 +23,11 @@ type SubscriptionRepo interface {
 	DeleteSubscription(ctx context.Context, id string) error
 }
 
-// PlanRepo интерфейс для работы с планами подписки
 type PlanRepo interface {
 	GetPlanByID(ctx context.Context, id string) (*core.Plan, error)
 	GetAll(ctx context.Context) ([]*core.Plan, error)
 }
 
-// PaymentRepo интерфейс для работы с платежами
 type PaymentRepo interface {
 	CreatePayment(ctx context.Context, payment *core.Payment) error
 	GetPaymentByID(ctx context.Context, id string) (*core.Payment, error)
@@ -40,7 +36,6 @@ type PaymentRepo interface {
 	DeletePayment(ctx context.Context, id string) error
 }
 
-// ReferralRepo интерфейс для работы с рефералами
 type ReferralRepo interface {
 	CreateReferral(ctx context.Context, referral *core.Referral) error
 	GetReferralByID(ctx context.Context, id int64) (*core.Referral, error)
@@ -48,7 +43,6 @@ type ReferralRepo interface {
 	GetReferralByRefereeID(ctx context.Context, refereeID int64) (*core.Referral, error)
 }
 
-// ReferralLinkRepo интерфейс для работы с реферальными ссылками
 type ReferralLinkRepo interface {
 	CreateReferralLink(ctx context.Context, link *core.ReferralLink) error
 	GetReferralLinkByID(ctx context.Context, id int64) (*core.ReferralLink, error)
@@ -58,7 +52,6 @@ type ReferralLinkRepo interface {
 	DeleteReferralLink(ctx context.Context, id int64) error
 }
 
-// VPNRepo интерфейс для работы с VPN подключениями
 type VPNRepo interface {
 	CreateVPNConnection(ctx context.Context, conn *core.VPNConnection) error
 	GetVPNConnectionsByTelegramUserID(ctx context.Context, telegramUserID int64) ([]*core.VPNConnection, error)
@@ -71,7 +64,6 @@ type VPNRepo interface {
 	GetActiveVPNConnections(ctx context.Context, telegramUserID int64) ([]*core.VPNConnection, error)
 }
 
-// NotificationRepo интерфейс для работы с уведомлениями
 type NotificationRepo interface {
 	CreateNotification(ctx context.Context, notification *core.Notification) error
 	GetNotificationByID(ctx context.Context, id string) (*core.Notification, error)

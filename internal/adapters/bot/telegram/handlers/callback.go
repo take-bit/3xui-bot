@@ -25,19 +25,23 @@ func NewCallbackHandler(
 ) *CallbackHandler {
 	msgService := service.NewMessageService(bot)
 	router := callback.NewRouter(userUC, subUC, paymentUC, vpnUC, referralUC, notifUC, msgService)
+
 	return &CallbackHandler{
 		router: router,
 	}
 }
 
 func (h *CallbackHandler) CanHandle(update tgbotapi.Update) bool {
+
 	return update.CallbackQuery != nil
 }
 
 func (h *CallbackHandler) Handle(ctx context.Context, update tgbotapi.Update) error {
+
 	return h.router.Handle(ctx, update)
 }
 
 func (h *CallbackHandler) HandleTextMessage(ctx context.Context, userID int64, chatID int64, messageText string) (bool, error) {
+
 	return h.router.HandleTextMessage(ctx, userID, chatID, messageText)
 }

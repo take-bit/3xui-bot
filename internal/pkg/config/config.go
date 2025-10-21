@@ -47,7 +47,6 @@ type MarzbanConfig struct {
 }
 
 type PaymentConfig struct {
-	// TODO: пока mock, позже можно добавить ключи API и указать тэги env
 }
 
 type SchedulerConfig struct {
@@ -61,6 +60,7 @@ type LoggingConfig struct {
 func Load(configPath string) (*Config, error) {
 	configFile, err := os.Open(configPath)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to open config file: %w", err)
 	}
 	defer configFile.Close()
@@ -68,20 +68,24 @@ func Load(configPath string) (*Config, error) {
 	cfg := &Config{}
 
 	if err := json.NewDecoder(configFile).Decode(cfg); err != nil {
+
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	if err := godotenv.Load(); err != nil {
+
 		return nil, fmt.Errorf("failed to load .env file: %w", err)
 	}
 
 	if err := env.Parse(cfg); err != nil {
+
 		return nil, fmt.Errorf("failed to parse env: %w", err)
 	}
 
 	normalize(cfg)
 
 	if err := validateRequired(cfg); err != nil {
+
 		return nil, err
 	}
 
@@ -118,8 +122,10 @@ func validateRequired(cfg *Config) error {
 	}
 
 	if len(errs) > 0 {
+
 		return errors.New("invalid config: " + strings.Join(errs, "; "))
 	}
+
 	return nil
 }
 

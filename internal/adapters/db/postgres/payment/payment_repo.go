@@ -15,6 +15,7 @@ type Payment struct {
 }
 
 func NewPayment(dbGetter transactorPgx.DBGetter) *Payment {
+
 	return &Payment{
 		dbGetter: dbGetter,
 	}
@@ -32,6 +33,7 @@ func (p *Payment) CreatePayment(ctx context.Context, payment *core.Payment) erro
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to create payment: %w", err)
 	}
 
@@ -51,6 +53,7 @@ func (p *Payment) GetPaymentByID(ctx context.Context, id string) (*core.Payment,
 	)
 
 	if err != nil {
+
 		return nil, usecase.ErrNotFound
 	}
 
@@ -65,6 +68,7 @@ func (p *Payment) GetPaymentsByUserID(ctx context.Context, userID int64) ([]*cor
 
 	rows, err := p.dbGetter(ctx).Query(ctx, query, userID)
 	if err != nil {
+
 		return nil, fmt.Errorf("failed to get payments by user ID: %w", err)
 	}
 	defer rows.Close()
@@ -78,12 +82,14 @@ func (p *Payment) GetPaymentsByUserID(ctx context.Context, userID int64) ([]*cor
 			&payment.CreatedAt, &payment.UpdatedAt,
 		)
 		if err != nil {
+
 			return nil, fmt.Errorf("failed to scan payment: %w", err)
 		}
 		payments = append(payments, payment)
 	}
 
 	if err = rows.Err(); err != nil {
+
 		return nil, fmt.Errorf("error iterating payments: %w", err)
 	}
 
@@ -92,8 +98,8 @@ func (p *Payment) GetPaymentsByUserID(ctx context.Context, userID int64) ([]*cor
 
 func (p *Payment) UpdatePayment(ctx context.Context, payment *core.Payment) error {
 	query := `
-		UPDATE payments 
-		SET amount = $2, currency = $3, payment_method = $4, 
+		UPDATE payments
+		SET amount = $2, currency = $3, payment_method = $4,
 		    description = $5, status = $6, updated_at = $7
 		WHERE id = $1`
 
@@ -103,10 +109,12 @@ func (p *Payment) UpdatePayment(ctx context.Context, payment *core.Payment) erro
 	)
 
 	if err != nil {
+
 		return fmt.Errorf("failed to update payment: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
+
 		return usecase.ErrNotFound
 	}
 
@@ -118,10 +126,12 @@ func (p *Payment) UpdatePaymentStatus(ctx context.Context, id, status string) er
 
 	result, err := p.dbGetter(ctx).Exec(ctx, query, id, status)
 	if err != nil {
+
 		return fmt.Errorf("failed to update payment status: %w", err)
 	}
 
 	if result.RowsAffected() == 0 {
+
 		return usecase.ErrNotFound
 	}
 
@@ -133,6 +143,7 @@ func (p *Payment) DeletePayment(ctx context.Context, id string) error {
 
 	_, err := p.dbGetter(ctx).Exec(ctx, query, id)
 	if err != nil {
+
 		return fmt.Errorf("failed to delete payment: %w", err)
 	}
 
